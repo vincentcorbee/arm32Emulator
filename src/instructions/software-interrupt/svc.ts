@@ -1,7 +1,8 @@
-import { AL, SUPERVISOR_CALL, SVC } from "../../constants/codes"
+import { AL, SUPERVISOR_CALL } from "../../constants/codes"
 
+export type SvcArgs = { cond?: number, comment: number }
 
-export const svc = (args: { cond?: number, comment: number }) => {
+export const svc = (args: SvcArgs) => {
   const { cond = AL, comment } = args
 
   let value = (cond << 28) >>> 0

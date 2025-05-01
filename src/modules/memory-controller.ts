@@ -52,6 +52,12 @@ export class MemoryController implements MemoryControllerInterface{
     return device.getBufferSlice(mappedAddress, length)
   }
 
+  getDevice(address: number): DeviceInterface {
+    const { device } = this.#findRegion(address)
+
+    return device
+  }
+
   #findRegion(address: number): Region {
     const region = this.#regions.find(region => address >= region.start && address <= region.end)
 

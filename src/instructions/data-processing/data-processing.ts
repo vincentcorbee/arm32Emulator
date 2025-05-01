@@ -5,6 +5,7 @@ export type Operand2 = {
   value: number,
   type: 'Register' | 'ImmidiateExpression',
   shift?: Shift
+  rotate?: number
 }
 
 export type DataProcessingArgs = {
@@ -29,10 +30,11 @@ export const dataProcessing = (args: DataProcessingArgs) => {
   value = (value | rn << 16) >>> 0
   value = (value | rd << 12) >>> 0
 
-  const { value: operand2Value, type, shift } = operand2
+  const { value: operand2Value, type, shift, rotate = 0 } = operand2
 
   if (type === 'ImmidiateExpression') {
-    value = (value | (operand2Value & 0xfff)) >>> 0
+    value = (value | rotate << 8) >>> 0
+    value = (value | (operand2Value & 0xff)) >>> 0
   } else {
     value = (value | (operand2Value & 0xf)) >>> 0
 

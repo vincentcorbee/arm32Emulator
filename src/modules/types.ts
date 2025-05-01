@@ -1,4 +1,4 @@
-export interface MemoryInterface {
+export interface MemoryInterface extends DeviceInterface{
   readUint8(offset: number): number
   writeUint8(offset: number, value: number): void
 
@@ -7,6 +7,7 @@ export interface MemoryInterface {
 
   readUint32(offset: number): number
   writeUint32(offset: number, value: number): void
+  writeInt32(offset: number, value: number): void
 
   view(): void
   viewAt(address: number, options?: { length: number }): void
@@ -31,6 +32,12 @@ export type DeviceInterface = {
   readChar: (address: number) => string
   getBufferSlice: (address: number, length: number) => ArrayBuffer
 }
+
+export type Trap = (instruction: number) => void
+
+export type Traps = Trap | ((instruction: number) => Trap)
+
+export type Pipeline = { fetch: number | null, decode: number | null, execute: (() => void) | null }
 
 export type Device = DeviceInterface;
 

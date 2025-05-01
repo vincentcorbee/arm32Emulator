@@ -57,9 +57,3 @@ export const R14_UND = 0x15
 export const SPSR_UND = 0x16
 
 export const SPSR = 0x17     // Saved Program Status Register
-
-/* CPSR flags */
-export const N = 0x80000000
-export const Z = 0x40000000
-export const C = 0x20000000
-export const V = 0x10000000

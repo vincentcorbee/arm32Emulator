@@ -27,7 +27,6 @@ export const str = map(
     const type = value[2]
     const mnemonic = type === 'B' ? STRB : STR
     const opCode = OpCodeNameToCode[mnemonic]
-
     const { rn, writeBack, offsetMode: i, prePost, offset } = value[8]
 
     return {

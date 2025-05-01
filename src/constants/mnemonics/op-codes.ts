@@ -7,6 +7,7 @@ export const LDRB = 'LDRB';
 export const STR = 'STR';
 export const STRB = 'STRB';
 export const MOV = 'MOV';
+export const MVN = 'MVN';
 export const B = 'B';
 export const BL = 'BL';
 export const BX = 'BX';

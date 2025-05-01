@@ -1,57 +1,13 @@
-import { Memory } from "./memory";
-import { ADD, AL, BLOCK_DATA_TRANSFER, BRANCH, BRANCH_EXCHANGE, C, CMP, DATA_PROCESSING_IMMEDIATE, DATA_PROCESSING_REGISTER, EQ, GE, GT, LE, LR, LT, MOV, MULTIPLY, N, NE, R13_SVC, R13_UND, R14_SVC, R14_UND, SINGLE_DATA_TRANSFER_IMMIDIATE, SINGLE_DATA_TRANSFER_REGISTER, SPSR, SPSR_UND, SUB, SUPERVISOR, SUPERVISOR_CALL, UND, UNDEFINED, USER, V, Z } from "../constants/codes";
-import { CPSR, PC, R0, R1, R10, R11, R12, R13, R14, R2, R3, R4, R5, R6, R7, R8, R9, SP, SPSR_SVC } from "../constants/codes";
-import { EXIT_SYS_CALL, WRITE_SYS_CALL } from "../constants/codes/sys-calls";
-import { CPUInterface } from "./types";
-import { RegisterCodesToNames } from "../constants/maps";
-import { MemoryController } from "./memory-controller";
+import { Memory } from "../memory";
+import { ADD, AL, BLOCK_DATA_TRANSFER, BRANCH, BRANCH_EXCHANGE, C, CMP, DATA_PROCESSING_IMMEDIATE, DATA_PROCESSING_REGISTER, EQ, GE, GT, LE, LR, LT, MOV, MULTIPLY, MVN, N, NE, R13_SVC, R13_UND, R14_SVC, R14_UND, SINGLE_DATA_TRANSFER_IMMIDIATE, SINGLE_DATA_TRANSFER_REGISTER, SPSR, SPSR_UND, SUB, SUPERVISOR, SUPERVISOR_CALL, UND, UNDEFINED, USER, V, Z } from "../../constants/codes";
+import { CPSR, PC, R0, R1, R2, R7, SP, SPSR_SVC } from "../../constants/codes";
+import { EXIT_SYS_CALL, WRITE_SYS_CALL } from "../../constants/codes/sys-calls";
+import { CPUInterface, Pipeline, Trap, Traps } from "../types";
+import { RegisterCodesToNames } from "../../constants/maps";
+import { MemoryController } from "../memory-controller";
+import { N as N_FLAG, C as C_FLAG, Z as Z_FLAG, V as V_FLAG } from '../../constants/mnemonics/flags'
+import { REGISTERS } from "./constants";
 
-type Trap = (instruction: number) => void
-
-type Traps = Trap | ((instruction: number) => Trap)
-
-const REGISTERS = new Map([
-  [R0, R0],
-  [R1, R1 << 2],
-  [R2, R2 << 2],
-  [R3, R3 << 2],
-  [R4, R4 << 2],
-  [R5, R5 << 2],
-  [R6, R6 << 2],
-  [R7, R7 << 2],
-  [R8, R8 << 2],
-  [R9, R9 << 2],
-  [R10, R10 << 2],
-  [R11, R11 << 2],
-  [R12, R12 << 2],
-  [R13, R13 << 2],
-  [R14, R14 << 2],
-  [PC, PC << 2],
-  [CPSR, CPSR << 2],
-  [R13_SVC, R13_SVC << 2],
-  [R13_UND, R13_UND << 2],
-  [R14_SVC, R14_SVC << 2],
-  [R14_UND, R14_UND << 2],
-  [SPSR_SVC, SPSR_SVC << 2],
-  [SPSR_UND, SPSR_UND << 2]
-])
-
-/**
-  All ARM instructions are 32 bits long.
-  Instructions are stored word-aligned.
-
-  https://developer.arm.com/documentation/dui0473/m/overview-of-the-arm-architecture/arm-and-thumb-instruction-set-overview
-
-  Bits 27–25	Instruction Type	Examples
-  000	Data Processing/Multiply	ADD, SUB, MOV, AND, CMP, MUL
-  001	Data Processing Immediate	ADD, SUB with immediate value
-  010	Load/Store Single Data	LDR, STR
-  011	Undefined	Reserved
-  100	Load/Store Multiple	LDM, STM
-  101	Branch	B, BL
-  110	Coprocessor	MRC, CDP
-  111	SVC or Exception (Bit 24 = 1)	SVC
-*/
 export class CPU implements CPUInterface {
   #memoryController: MemoryController;
   #registers: Map<number, number>
@@ -60,9 +16,9 @@ export class CPU implements CPUInterface {
   #singleDataTransferTraps: Record<number, Trap>;
   #blockDataTransferTraps: Record<number, Trap>;
   #instructionTraps: Record<number, Traps>;
-  #conditions: Record<number, () => boolean>;
-
-  #pipeline: { fetch: number | null, decode: number | null, execute: (() => void) | null };
+  #conditionHandlers: Record<number, () => boolean>;
+  #shiftHandlers: Record<number, (value: number, shift: number) => number>;
+  #pipeline: Pipeline;
   #cylces: number;
 
   constructor(memoryController: MemoryController) {
@@ -70,6 +26,7 @@ export class CPU implements CPUInterface {
 
     this.#dataProcessingTraps = {
       [MOV]: this.#MOVTrap,
+      [MVN]: this.#MVNTrap,
       [ADD]: this.#ADDTrap,
       [SUB]: this.#SUBTrap,
       [CMP]: this.#CMPTrap,
@@ -83,6 +40,13 @@ export class CPU implements CPUInterface {
     this.#blockDataTransferTraps = {
       [1]: this.#LDMTrap,
       [0]: this.#STMTrap,
+    }
+
+    this.#shiftHandlers = {
+      [0]: this.#lsl,
+      [1]: this.#lsr,
+      [2]: this.#asr,
+      [3]: this.#ror,
     }
 
     this.#instructionTraps = {
@@ -100,7 +64,7 @@ export class CPU implements CPUInterface {
 
     this.#registers = REGISTERS
 
-    this.#conditions = {
+    this.#conditionHandlers = {
       [AL]: () => true,
       [EQ]: () => this.#getZeroFlag() === 1,
       [NE]: () => this.#getZeroFlag() === 0,
@@ -116,7 +80,7 @@ export class CPU implements CPUInterface {
     this.#pipeline = { fetch: null, decode: null, execute: null };
     this.#registerMemory = new Memory(registerMemorySize);
 
-    /* Start the program in user mode */
+    /* Start in user mode */
     this.#setMode(USER);
   }
 
@@ -161,8 +125,10 @@ export class CPU implements CPUInterface {
     });
 
     const name = RegisterCodesToNames[SPSR]
-    const value = this.#getSPSR()
-    const line = `${name}:${' '.repeat(5 - name.length)}0x${value.toString(16).padStart(8, '0')} ${this.#getContentsPSR(value)}`
+    const register = this.#getSPSR()
+    const value = register === SPSR ? 0 : this.#getRegister(register);
+    const contents = register === SPSR ? '....' : this.#getContentsPSR(register)
+    const line = `${name}:${' '.repeat(5 - name.length)}0x${value.toString(16).padStart(8, '0')} ${contents}`
 
     process.stdout.write(`${line}\n\n`);
   }
@@ -201,22 +167,17 @@ export class CPU implements CPUInterface {
   /**
     4x   2x x 4x     x 4x 4x 12x
     Cond 00 I Opcode S Rn Rd Op2
+
+    If the S bit is set (and Rd is not R15) the V flag in the CPSR will be set
+    if an overflow occurs into bit 31 of the result;
+    this may be ignored if the operands were considered unsigned, but warns
+    of a possible error if the operands were 2's complement signed.
+    The C flag will be set to the carry out of bit 31 of the ALU, the Z flag will be set if and only if the
+    result was zero, and the N flag will be set to the value of bit 31 of the result (indicating a negative result if
+    the operands are considered to be 2's complement signed).
   */
   #dataProcessingTrap = (instruction: number) => {
-    /*
-      Immediate Operand
-
-      0 = operand 2 is a register
-      8x    4x
-      Shift Rm
-
-      1 = operand 2 is an immediate value
-      4x     8x
-      Rotate mm
-    */
-    const opCode = instruction >> 21 & 0xf;
-
-    return this.#dataProcessingTraps[opCode];
+    return this.#dataProcessingTraps[instruction >> 21 & 0xf];
   }
 
   /**
@@ -224,13 +185,10 @@ export class CPU implements CPUInterface {
     Cond 0 1 I P U B W L Rn Rd Offset
   */
   #singleDataTransferTrap = (instruction: number) => {
-    const loadStore = instruction >> 20 & 0x1;
-
-    return this.#singleDataTransferTraps[loadStore];
+    return this.#singleDataTransferTraps[instruction >> 20 & 0x1];
   }
 
    /**
-   *
    * Addressing modes - Stack modes
    *
    * Full ascending stack
@@ -259,24 +217,31 @@ export class CPU implements CPUInterface {
    */
   #BTrap = (instruction: number): void => {
     const cond = instruction >> 28 & 0xf;
+
+    if (!this.#shouldExecute(cond)) return
+
+    const l = instruction >> 24 & 0x1;
     const offset = (instruction & 0xffffff);
     const sign = offset >>> 23 & 0x1;
     const pc = this.#getRegister(PC);
-    const l = instruction >> 24 & 0x1;
     const signedOffset = sign ? (((0xff << 24) >>> 0) | offset) : offset;
-    const shouldExecute = this.#shouldExecute(cond);
 
-    if (shouldExecute) {
-      this.#setRegister(PC, pc + signedOffset);
+    this.#setRegister(PC, pc + signedOffset);
 
-      /* Adjust PC to allow prefetching */
-      if (l) this.#setRegister(LR, pc - 4);
+    /* Adjust PC to allow prefetching */
+    if (l) this.#setRegister(LR, pc - 4);
 
-      this.#flushPipeline();
-    }
+    this.#flushPipeline();
   }
 
+  /**
+   * BX{cond} Rn
+   */
   #BXTrap = (instruction: number): void => {
+    const cond = instruction >> 28 & 0xf;
+
+    if (!this.#shouldExecute(cond)) return
+
     const rn = instruction & 0xf;
 
     this.#setRegister(PC, this.#getRegister(rn));
@@ -285,15 +250,17 @@ export class CPU implements CPUInterface {
   }
 
   /**
-   * CMP{cond} {Rn}, Operand2
+   * CMP{cond} Rn, <Op2>
    */
   #CMPTrap = (instruction: number): void => {
-    const immediate = instruction >> 25 & 0x1;
+    const cond = instruction >> 28 & 0xf;
+
+    if (!this.#shouldExecute(cond)) return
+
     const rn = instruction >> 16 & 0xf;
 
     const left = this.#getRegister(rn);
-    const right = immediate ? instruction & 0xfff : this.#getRegister(instruction & 0xff);
-
+    const right = this.#getSecondOperandValue(instruction);
     const result = left - right;
 
     this.#setCarryFlag(result > 0);
@@ -302,94 +269,151 @@ export class CPU implements CPUInterface {
   }
 
   /**
-    MOV{S}{cond} {Rd}, Operand2
+    MOV{cond}{S} Rd, <Op2>
 
     4x   2x x 4x     x 4x 4x 12x
     Cond 00 I Opcode S Rn Rd Op2
   */
   #MOVTrap = (instruction: number): void => {
-    const immediate = instruction >> 25 & 0x1;
+    const cond = instruction >> 28 & 0xf;
+
+    if (!this.#shouldExecute(cond)) return
+
     const rd = instruction >> 12 & 0xf;
+    const s = instruction >> 20 & 0x1;
+    const value = this.#getSecondOperandValue(instruction);
 
-    if (immediate) {
-      const immediateValue = instruction & 0xff;
+    this.#setRegister(rd, value);
 
-      this.#setRegister(rd, immediateValue);
-    } else {
-      const rm = instruction & 0xff;
-
-      this.#setRegister(rd, this.#getRegister(rm));
+    if (s) {
+      this.#setNegativeFlag(value < 0);
+      this.#setZeroFlag(value === 0);
     }
   }
 
   /**
-   * ADD{S}{cond} Rd, Rn, Operand2
-   * ADD{cond} Rd, Rn, #imm12
+    MOV{cond}{S} Rd, <Op2>
+
+    4x   2x x 4x     x 4x 4x 12x
+    Cond 00 I Opcode S Rn Rd Op2
+  */
+  #MVNTrap = (instruction: number): void => {
+    const cond = instruction >> 28 & 0xf;
+
+    if (!this.#shouldExecute(cond)) return
+
+    const rd = instruction >> 12 & 0xf;
+    const s = instruction >> 20 & 0x1;
+    const value = ~this.#getSecondOperandValue(instruction);
+
+    this.#setRegister(rd, value);
+
+    if (s) {
+      this.#setNegativeFlag(value < 0);
+      this.#setZeroFlag(value === 0);
+    }
+  }
+
+  /**
+   * ADD{cond}{S} Rd, Rn, <Op2>
    *
    * 4x   2x x 4x     x 4x 4x 12x
    * Cond 00 I Opcode S Rn Rd Op2
    */
   #ADDTrap = (instruction: number): void => {
-    const immediate = instruction >> 25 & 0x1;
+    const cond = instruction >> 28 & 0xf;
+
+    if (!this.#shouldExecute(cond)) return
+
+    const s = instruction >> 20 & 0x1;
     const rn = instruction >> 16 & 0xf;
     const rd = instruction >> 12 & 0xf;
 
     const left = this.#getRegister(rn);
-    const right = immediate ? instruction & 0xfff : this.#getRegister(instruction & 0xff);
-
-    this.#setRegister(rd, left + right);
-  }
-
-  /**
-   * 31  28 27             22 21 20 19 16 15 12 11 8 7     4 3  0
-   *  Cond  0  0  0  0  0  0  A  S   Rd    Rn    Rs  1 0 0 1  Rm
-   */
-  #MULTrap = (instruction: number): void => {
-    const a = instruction >> 21 & 0x1;
-
-    if (a === 1) throw Error('Invalid instruction');
-
-    const cond = instruction >> 28 & 0xf;
-    const shouldExecute = this.#shouldExecute(cond);
-
-    if (!shouldExecute) return;
-
-    const s = instruction >> 20 & 0x1;
-    const rd = instruction >> 16 & 0xf;
-    const rs = instruction >> 8 & 0xf;
-    const rm = instruction & 0xf;
-    const left = this.#getRegister(rm);
-    const right = this.#getRegister(rs);
-    const result = left * right;
+    const right = this.#getSecondOperandValue(instruction);
+    const result = left + right;
 
     this.#setRegister(rd, result);
+
+    if (s) {
+      this.#setCarryFlag(result > 0);
+      this.#setNegativeFlag(result < 0);
+      this.#setZeroFlag(result === 0);
+    }
   }
 
   /**
-   * SUB{S}{cond} Rd, Rn, Operand2
-   * SUB{cond} Rd, Rn, #imm12
+   * SUB{S}{cond} Rd, Rn, <Op2>
    *
    * 4x   2x x 4x     x 4x 4x 12x
    * Cond 00 I Opcode S Rn Rd Op2
    */
   #SUBTrap = (instruction: number): void => {
-    const immediate = instruction >> 25 & 0x1;
+    const cond = instruction >> 28 & 0xf;
+
+    if (!this.#shouldExecute(cond)) return
+
+    const s = instruction >> 20 & 0x1;
     const rn = instruction >> 16 & 0xf;
     const rd = instruction >> 12 & 0xf;
 
     const left = this.#getRegister(rn);
-    const right = immediate ? instruction & 0xfff : this.#getRegister(instruction & 0xff);
+    const right = this.#getSecondOperandValue(instruction);
+    const result = left - right;
 
-    this.#setRegister(rd, left - right);
+    this.#setRegister(rd, result);
+
+    if (s) {
+      this.#setCarryFlag(left >= right);
+      this.#setOverflowFlag(left < 0 && right < 0 && result > 0);
+      this.#setNegativeFlag(result < 0);
+      this.#setZeroFlag(result === 0);
+    }
   }
 
   /**
-   * LDR{cond}{B}{T} Rd, [Rn, #Offset]
+   * MUL{cond}{S} Rd, Rm, Rs
+   *
+   * 31  28 27             22 21 20 19 16 15 12 11 8 7     4 3  0
+   *  Cond  0  0  0  0  0  0  A  S   Rd    Rn    Rs  1 0 0 1  Rm
+   */
+  #MULTrap = (instruction: number): void => {
+    const cond = instruction >> 28 & 0xf;
+
+    if (!this.#shouldExecute(cond)) return
+
+    const a = instruction >> 21 & 0x1;
+
+    if (a === 1) throw Error('Invalid instruction');
+
+    const s = instruction >> 20 & 0x1;
+    const rd = instruction >> 16 & 0xf;
+    const rs = instruction >> 8 & 0xf;
+    const rm = instruction & 0xf;
+
+    const left = this.#getRegister(rm);
+    const right = this.#getRegister(rs);
+    const result = left * right;
+
+    this.#setRegister(rd, result);
+
+    if (s) {
+      this.#setNegativeFlag(result < 0);
+      this.#setZeroFlag(result === 0);
+    }
+  }
+
+  /**
+   * LDR{cond}{B}{T} Rd, <Address>
    *
    * 4x   x x x x x x x x 4x 4x 12x
    * Cond 0 1 I P U B W L Rn Rd Offset
    */
   #LDRTrap = (instruction: number): void => {
+    const cond = instruction >> 28 & 0xf;
+
+    if (!this.#shouldExecute(cond)) return
+
     const immediate = instruction >> 25 & 0x1;
     const loadStore = instruction >> 20 & 0x1;
 
@@ -420,6 +444,10 @@ export class CPU implements CPUInterface {
    * Cond 0 1 I P U B W L Rn Rd Offset
    */
   #STRTrap = (instruction: number): void => {
+    const cond = instruction >> 28 & 0xf;
+
+    if (!this.#shouldExecute(cond)) return
+
     const immediate = instruction >> 25 & 0x1;
     const loadStore = instruction >> 20 & 0x1;
 
@@ -449,18 +477,21 @@ export class CPU implements CPUInterface {
   }
 
   /**
-   * STM{cond}<FD|ED|FA|EA|IA|IB|DA|DB> Rn{!},<Rlist>{^}
+   * STM{cond}<FD|ED|FA|EA|IA|IB|DA|DB> Rn{!}, <Rlist>{^}
    *
    * 31   28  27   25 24 23 22 21 20 19  16  15          0
    *   Cond     100    P  U  S  W  L   Rn    Register list
    *
    */
   #STMTrap = (instruction: number): void => {
+    const cond = instruction >> 28 & 0xf;
+
+    if (!this.#shouldExecute(cond)) return
+
     const loadStore = instruction >> 20 & 0x1;
 
     if (loadStore === 1) throw Error('Invalid instruction');
 
-    const _cond = instruction >> 28 & 0xf;
     const prePost = instruction >> 24 & 0x1;
     const upDown = instruction >> 23 & 0x1;
     const _psrAndForceUserBit = instruction >> 22 & 0x1;
@@ -493,17 +524,20 @@ export class CPU implements CPUInterface {
   }
 
   /**
-   * LDM{cond}<FD|ED|FA|EA|IA|IB|DA|DB> Rn{!},<Rlist>{^}
+   * LDM{cond}<FD|ED|FA|EA|IA|IB|DA|DB> Rn{!}, <Rlist>{^}
    *
    * 31   28  27   25 24 23 22 21 20 19  16  15          0
    *   Cond     100    P  U  S  W  L   Rn    Register list
    */
   #LDMTrap = (instruction: number): void => {
+    const cond = instruction >> 28 & 0xf;
+
+    if (!this.#shouldExecute(cond)) return
+
     const loadStore = instruction >> 20 & 0x1;
 
     if (loadStore === 0) throw Error('Invalid instruction');
 
-    const _cond = instruction >> 28 & 0xf;
     const prePost = instruction >> 24 & 0x1;
     const upDown = instruction >> 23 & 0x1;
     const _psrAndForceUserBit = instruction >> 22 & 0x1;
@@ -512,10 +546,10 @@ export class CPU implements CPUInterface {
 
     let registerList = instruction & 0xffff;
     let address = this.#getRegister(baseRegister)
-    let index = 0
+    let index = Math.floor(Math.log2(registerList));
 
-    while(registerList) {
-      const register = registerList & 0x1;
+    while(index > -1) {
+      const register = registerList >> index & 0x1;
 
       if (register) {
         if (prePost) {
@@ -527,16 +561,14 @@ export class CPU implements CPUInterface {
         }
       }
 
-      registerList = registerList >> 1;
-
-      index++
+      index--
     }
 
     if (writeBack) this.#setRegister(baseRegister, address)
   }
 
   /**
-    SWI{cond} imm24
+    SVC{cond} imm24
 
     3.4.4 Software interrupt
     The software interrupt instruction (SWI) is used for getting into Supervisor mode,
@@ -550,7 +582,11 @@ export class CPU implements CPUInterface {
     To return from a SWI, use MOVS PC, R14_svc.
     This will restore the PC and CPSR and return to the instruction following the SWI.
   */
-  #SVCTrap = (_instruction: number): void => {
+  #SVCTrap = (instruction: number): void => {
+    const cond = instruction >> 28 & 0xf;
+
+    if (!this.#shouldExecute(cond)) return
+
     const systemCall = this.#getRegister(R7)
     const cpsr = this.#getRegister(CPSR);
 
@@ -569,7 +605,7 @@ export class CPU implements CPUInterface {
 
     switch (systemCall) {
       case EXIT_SYS_CALL: {
-        const exitCode = this.#getRegister(R0);
+        const exitCode = this.#getRegister(R0) & 0xff;
 
         process.exit(exitCode)
       }
@@ -577,7 +613,6 @@ export class CPU implements CPUInterface {
         const fd = this.#getRegister(R0);
         const bufferAddress = this.#getRegister(R1);
         const length = this.#getRegister(R2);
-
         const buffer = new Uint8Array(this.#memoryController.getBufferSlice(bufferAddress, length));
 
         if (fd === 1) process.stdout.write(buffer);
@@ -599,6 +634,7 @@ export class CPU implements CPUInterface {
 
   /**
    * 3.4.5 Undefined instruction trap
+   *
    * When the ARM7DI comes across an instruction which it cannot handle (see Chapter 4.0: Instruction Set), it
    * offers it to any coprocessors which may be present. If a coprocessor can perform this instruction but is busy
    * at that time, ARM7DI will wait until the coprocessor is ready or until an interrupt occurs. If no coprocessor
@@ -636,8 +672,52 @@ export class CPU implements CPUInterface {
     this.#setRegister(CPSR, this.#getRegister(SPSR_UND));
   }
 
+  #getSecondOperandValue(instruction: number): number {
+    const immediate = instruction >> 25 & 0x1;
+
+    if (immediate) {
+      const imm = ((instruction & 0xff) << 24) >> 24
+      const rotate = (instruction >> 8 & 0xf) << 1;
+
+      return this.#ror(imm, rotate);
+    }
+
+    const registerValue = this.#getRegister(instruction & 0xff);
+    const shift = instruction >> 4 & 0xff;
+
+    if (shift) {
+      const shiftType = instruction >> 5 & 0x3;
+      const shiftSourceType = instruction >> 4 & 0x1;
+      const shiftAmount = shiftSourceType === 1 ? this.#getRegister(instruction >> 8 & 0xf) : instruction >> 7 & 0x1f;
+
+      return this.#shift(registerValue, shiftAmount, shiftType);
+    }
+
+    return registerValue
+  }
+
+  #shift = (value: number, shift: number, shiftType: number): number => {
+    return this.#shiftHandlers[shiftType](value, shift);
+  }
+
+  #ror = (value: number, shift: number): number => {
+    return (value >>> shift) | (value << (32 - shift)) >>> 0;
+  }
+
+  #lsl = (value: number, shift: number): number => {
+    return value << shift;
+  }
+
+  #lsr = (value: number, shift: number): number => {
+    return value >>> shift;
+  }
+
+  #asr = (value: number, shift: number): number => {
+    return value >> shift;
+  }
+
   #shouldExecute(cond: number): boolean {
-    const condition = this.#conditions[cond];
+    const condition = this.#conditionHandlers[cond];
 
     if (typeof condition === 'function') return condition();
 
@@ -659,47 +739,35 @@ export class CPU implements CPUInterface {
 
     switch (mode) {
       case SUPERVISOR: {
-        return this.#getRegister(SPSR_SVC);
+        return SPSR_SVC;
       }
       case UND: {
-        return this.#getRegister(SPSR_UND);
+        return SPSR_UND;
       }
       default: {
-        return 0;
+        return SPSR;
       }
     }
   }
 
-  /**
-   * Sets the zero flag in the CPSR register.
-   */
   #setZeroFlag(state: boolean): void {
     const cpsr = this.#getRegister(CPSR);
 
     this.#setRegister(CPSR, (cpsr & ~Z) | (state ? Z : 0));
   }
 
-  /**
-   * Sets the negative flag in the CPSR register.
-   */
   #setNegativeFlag(state: boolean): void {
     const cpsr = this.#getRegister(CPSR);
 
     this.#setRegister(CPSR, (cpsr & ~N) | (state ? N : 0));
   }
 
-  /**
-   * Sets the carry flag in the CPSR register.
-   */
   #setCarryFlag(state: boolean): void {
     const cpsr = this.#getRegister(CPSR);
 
     this.#setRegister(CPSR, (cpsr & ~C) | (state ? C : 0));
   }
 
-  /**
-   * Sets the overflow flag in the CPSR register.
-   */
   #setOverflowFlag(state: boolean): void {
     const cpsr = this.#getRegister(CPSR);
 
@@ -745,10 +813,10 @@ export class CPU implements CPUInterface {
   #getContentsPSR(register: number): string {
     let contents = '';
 
-    contents += this.#getNegativeFlag(register) ? 'N' : '.';
-    contents += this.#getZeroFlag(register) ? 'Z' : '.';
-    contents += this.#getCarryFlag(register) ? 'C' : '.';
-    contents += this.#getOverflowFlag(register) ? 'V' : '.';
+    contents += this.#getNegativeFlag(register) ? N_FLAG : '.';
+    contents += this.#getZeroFlag(register) ? Z_FLAG : '.';
+    contents += this.#getCarryFlag(register) ? C_FLAG : '.';
+    contents += this.#getOverflowFlag(register) ? V_FLAG : '.';
 
     return contents
   }

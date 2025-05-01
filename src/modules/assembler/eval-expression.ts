@@ -17,12 +17,26 @@ function evalBinaryExpression(node: any, symbolTable: any, locationCounter: numb
   }
 }
 
+function evalUnaryExpression(node: any, symbolTable: any, locationCounter: number): any {
+  const { operator, value } = node
+  const argumentValue = evalExpression(value, symbolTable, locationCounter)
+
+  switch (operator) {
+    case '+': return +argumentValue
+    case '-': return -argumentValue
+    case '~': return ~argumentValue
+  }
+}
+
 export function evalExpression(node: any, symbolTable: any, locationCounter: number): any {
   const { type } = node
 
   switch (type) {
     case 'BinaryExpression': {
       return evalBinaryExpression(node, symbolTable, locationCounter)
+    }
+    case 'UnaryExpression': {
+      return evalUnaryExpression(node, symbolTable, locationCounter)
     }
     case 'LabelExpression': {
       const { value: { name } } = node

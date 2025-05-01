@@ -8,6 +8,7 @@ import { ldm } from "./ldm";
 import { ldr } from "./ldr";
 import { mov } from "./mov";
 import { mul } from "./mul";
+import { mvn } from "./mvn";
 import { pop } from "./pop";
 import { push } from "./push";
 import { stm } from "./stm";
@@ -30,5 +31,6 @@ export const instruction = either(
   pop,
   push,
   sub,
-  mul
+  mul,
+  mvn
 )

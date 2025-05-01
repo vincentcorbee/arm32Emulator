@@ -21,10 +21,9 @@ export class Memory implements MemoryInterface, DeviceInterface {
 
   viewAt(address: number, options?: { length: number }): void {
     const { length = 4 } = options || {};
-
     const byteLength = this.#buffer.byteLength;
-
     const rows = Math.ceil(length / 4);
+
     let currentAddress = address
 
     for(let i = 0; i < rows; i ++) {
@@ -32,17 +31,17 @@ export class Memory implements MemoryInterface, DeviceInterface {
       let chars = ''
 
       for (let j = 0; j < 4; j ++) {
-        if (currentAddress + j * 4 >= byteLength) return;
+        if (currentAddress + j * 4 >= byteLength) break;
 
         for (let k = 0; k < 4; k++) {
-          /* Need to escape characters like \n, \t etc */
-          const char = this.readChar(currentAddress + k).replace('\n', '\\n');
+          const char = this.readChar(currentAddress + k);
+          const code = char.charCodeAt(0);
 
-          chars += char !== '\x00' ? char : '·';
+          /* Only print printable ASCII characters */
+          chars += code >= 0x20 && code <= 0x7e ? char : '·';
         }
 
         chars += ' ';
-
         line += ` 0x${this.readUint32(currentAddress + j * 4).toString(16).padStart(8, '0')}`;
 
         currentAddress = currentAddress += 4;
@@ -56,8 +55,8 @@ export class Memory implements MemoryInterface, DeviceInterface {
 
   view(): void {
     const byteLength = this.#buffer.byteLength;
-
     const rows = Math.floor(byteLength / 4);
+
     let currentAddress = 0
 
     for(let i = 0; i < rows; i ++) {
@@ -65,7 +64,7 @@ export class Memory implements MemoryInterface, DeviceInterface {
       let chars = ''
 
       for (let j = 0; j < 4; j ++) {
-        if (currentAddress + j * 4 >= byteLength) return;
+        if (currentAddress + j * 4 >= byteLength) break;
 
         for (let k = 0; k < 4; k++) {
           const char = this.readChar(currentAddress + k);
@@ -76,7 +75,6 @@ export class Memory implements MemoryInterface, DeviceInterface {
         }
 
         chars += ' ';
-
         line += ` 0x${this.readUint32(currentAddress + j * 4).toString(16).padStart(8, '0')}`;
 
         currentAddress = currentAddress += 4;
@@ -114,5 +112,9 @@ export class Memory implements MemoryInterface, DeviceInterface {
 
   writeUint32(offset: number, value: number): void {
     this.#dataView.setUint32(offset, value, this.#endianness === 'little');
+  }
+
+  writeInt32(offset: number, value: number): void {
+    this.#dataView.setInt32(offset, value, this.#endianness === 'little');
   }
 }

@@ -6,7 +6,7 @@ import { register } from "./register"
 import { shift } from "./shift"
 import { comma, leftSquareBracket, LSL, exclamationMark, rightSquareBracket } from "./tokens"
 
-const registerOffset = map(
+const registerOffsetPreIndexed = map(
   sequence(
     leftSquareBracket,
     optionalWhitespace,
@@ -55,7 +55,7 @@ const registerOffset = map(
       offset,
       shift,
       writeBack: writeBack !== null ? 1 : 0,
-      prePost: writeBack !== null ? 1 : 0,
+      prePost: 1,
     }
 })
 
@@ -87,7 +87,7 @@ const registerOffsetPostIndexed = map(
     }
 })
 
-const immidiateOffset = map(
+const immidiateOffsetPreIndexed = map(
   sequence(
     leftSquareBracket,
     optionalWhitespace,
@@ -120,7 +120,7 @@ const immidiateOffset = map(
       rn,
       offset,
       writeBack: writeBack !== null ? 1 : 0,
-      prePost: writeBack !== null ? 1 : 0,
+      prePost: 1,
     }
 })
 
@@ -150,6 +150,6 @@ const immidiateOffsetPostIndexed = map(
 export const offsetAddressing = either(
   immidiateOffsetPostIndexed,
   registerOffsetPostIndexed,
-  immidiateOffset,
-  registerOffset,
+  immidiateOffsetPreIndexed,
+  registerOffsetPreIndexed,
 )

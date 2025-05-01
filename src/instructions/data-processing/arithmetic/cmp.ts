@@ -1,7 +1,9 @@
 import { AL } from "../../../constants/codes/condition";
 import { CMP } from "../../../constants/codes/op-codes";
 
-export const cmp = (args: { cond?: number; rn: number; i: number; operand2: number }) => {
+export type CmpArgs = { cond?: number; rn: number; i: number; operand2: number }
+
+export const cmp = (args: CmpArgs) => {
   const { rn, i, operand2, cond = AL } = args
   const s = 1
 

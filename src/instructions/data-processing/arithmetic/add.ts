@@ -1,4 +1,6 @@
 import { ADD } from "../../../constants/codes/op-codes"
 import { dataProcessing, DataProcessingArgs } from "../data-processing";
 
-export const add = (args: Omit<DataProcessingArgs, 'opCode'>) => dataProcessing({ ...args, opCode: ADD });
+export type AddArgs = Omit<DataProcessingArgs, 'opCode'>
+
+export const add = (args: AddArgs) => dataProcessing({ ...args, opCode: ADD });
