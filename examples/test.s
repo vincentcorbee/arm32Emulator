@@ -2,7 +2,7 @@
 
 _start:
 ldr r2, =str
-ldrb r3, [r2]
+ldrb r3, [r2] blaat
 ldr r4, =str_length
 ldr r5, =error_message_socket
 ldrb r6, [r5]
