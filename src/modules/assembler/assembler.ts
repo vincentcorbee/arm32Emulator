@@ -83,8 +83,6 @@ export class Assembler {
     const { value } = preProcessResult
     const result = program.parse(value)
 
-    console.dir(result, { depth: null })
-
     if (!result.success) {
       console.error(result)
       process.exit(1)

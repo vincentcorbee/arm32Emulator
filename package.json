@@ -1,13 +1,12 @@
 {
-  "name": "vm",
+  "name": "@digitalbranch/vm",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Arm32 emulator in JavaScript",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
+  "author": "V.J.M. Corbee",
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^22.10.5",

@@ -4,17 +4,17 @@
 _start:
 
 /*
-int main (void)
-{
-	int result = mul(1, 2, 3, 4, 5);
+	int main (void)
+	{
+		int result = mul(1, 2, 3, 4, 5);
 
-	return 0;
-}
+		return 0;
+	}
 
-int mul (int a, int b, int c, int d, int e)
-{
-  return a * b * c * d * e;
-}
+	int mul (int a, int b, int c, int d, int e)
+	{
+		return a * b * c * d * e;
+	}
 */
 
 @ int main(void)
