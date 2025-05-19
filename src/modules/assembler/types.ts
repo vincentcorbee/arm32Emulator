@@ -1,4 +1,4 @@
-import { Memory } from "../types";
+import { Memory } from "../memory/types";
 
 export type Section = {
   type: 'text' | 'data';

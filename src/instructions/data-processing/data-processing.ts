@@ -1,5 +1,5 @@
 import { AL, DATA_PROCESSING } from "../../constants/codes"
-import { Shift } from "../../modules/types";
+import { Shift } from "../../modules/cpu/types";
 
 export type Operand2 = {
   value: number,

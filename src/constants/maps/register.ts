@@ -1,4 +1,4 @@
-import { Registers } from "../../modules/types";
+import { Registers } from "../../modules/cpu/types";
 import { R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, FP, IP, SP, LR, PC, CPSR, R13_SVC, R14_SVC, SPSR_SVC, R11, R12, R13, R14, R15, SPSR, SPSR_UND, R14_UND, R13_UND } from "../codes/registers";
 
 export const RegisterCodesToNames: Record<number, Registers> = {

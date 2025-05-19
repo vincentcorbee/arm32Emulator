@@ -36,15 +36,18 @@ export const R13 = 0x0d
 export const R14 = 0x0e
 
 /* Special purpose */
-export const R15 = 0x0f      // Program Counter
-export const CPSR = 0x10     // Current Program Status Register
+
+/* Program Counter */
+export const R15 = 0x0f
+/* Current Program Status Register */
+export const CPSR = 0x10
 
 /* Register aliases */
-export const FP = 0x0b       // R11
-export const IP = 0x0c       // R12
-export const SP = 0x0d       // R13
-export const LR = 0x0e       // R14
-export const PC = 0x0f       // R15
+export const FP = R11
+export const IP = R12
+export const SP = R13
+export const LR = R14
+export const PC = R15
 
 /* Supervisor mode */
 export const R13_SVC = 0x11
@@ -56,4 +59,5 @@ export const R13_UND = 0x14
 export const R14_UND = 0x15
 export const SPSR_UND = 0x16
 
-export const SPSR = 0x17     // Saved Program Status Register
+/* Saved Program Status Register */
+export const SPSR = 0x17

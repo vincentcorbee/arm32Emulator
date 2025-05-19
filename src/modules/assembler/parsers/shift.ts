@@ -1,6 +1,6 @@
 import { ShiftTypeNameToCode } from "../../../constants/maps";
 import { optional, map, sequence, or } from "../../parser-combinators";
-import { ShiftTypes } from "../../types";
+import { ShiftTypes } from "../../cpu/types";
 import { immidiateExpression } from "./expressions/immidiate-expression";
 import { optionalWhitespace } from "./optional-whitespace";
 import { register } from "./register";

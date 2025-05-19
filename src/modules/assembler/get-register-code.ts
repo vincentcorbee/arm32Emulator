@@ -1,5 +1,5 @@
 import { RegisterNameToCode } from "../../constants/maps"
-import { Registers } from "../types"
+import { Registers } from "../cpu/types"
 
 export function getRegisterCode(node: any): any {
   const { value } = node

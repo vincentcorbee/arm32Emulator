@@ -1,6 +1,6 @@
 import { SINGLE_DATA_TRANSFER } from "../../constants/codes";
-import { AL, LDR } from "../../modules/instructions";
-import { Shift } from "../../modules/types";
+import { AL } from "../../modules/instructions";
+import { Shift } from "../../modules/cpu/types";
 
 export type ImmidiateOffset = {
   type: 'ImmidiateExpression'

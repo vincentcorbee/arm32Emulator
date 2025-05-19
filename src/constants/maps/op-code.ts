@@ -1,4 +1,4 @@
-import { OpCodes } from "../../modules/types";
+import { OpCodes } from "../../modules/cpu/types";
 import { AND, SUB, RSB, ADD, ADC, SBC, RSC, TST, TEQ, CMP, CMN, ORR, MOV, BIC, MVN, B, BL, SVC, LDR, LDRB, STRB, STR, STM, LDM, BX, PUSH, POP, MUL } from "../codes/op-codes";
 import {
   AND as AND_NAME,

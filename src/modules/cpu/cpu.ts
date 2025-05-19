@@ -2,16 +2,17 @@ import { Memory } from "../memory";
 import { ADD, AL, BLOCK_DATA_TRANSFER, BRANCH, BRANCH_EXCHANGE, C, CMP, DATA_PROCESSING_IMMEDIATE, DATA_PROCESSING_REGISTER, EQ, GE, GT, LE, LR, LT, MOV, MULTIPLY, MVN, N, NE, R13_SVC, R13_UND, R14_SVC, R14_UND, SINGLE_DATA_TRANSFER_IMMIDIATE, SINGLE_DATA_TRANSFER_REGISTER, SPSR, SPSR_UND, SUB, SUPERVISOR, SUPERVISOR_CALL, UND, UNDEFINED, USER, V, Z } from "../../constants/codes";
 import { CPSR, PC, R0, R1, R2, R7, SP, SPSR_SVC } from "../../constants/codes";
 import { EXIT_SYS_CALL, WRITE_SYS_CALL } from "../../constants/codes/sys-calls";
-import { CPUInterface, Pipeline, Trap, Traps } from "../types";
+import { CPUInterface, Pipeline, Trap, Traps } from "./types";
 import { RegisterCodesToNames } from "../../constants/maps";
-import { MemoryController } from "../memory-controller";
+import { MemoryController } from "../memory/types";
 import { N as N_FLAG, C as C_FLAG, Z as Z_FLAG, V as V_FLAG } from '../../constants/mnemonics/flags'
 import { REGISTERS } from "./constants";
+import { formatHex } from "../../utils";
 
 export class CPU implements CPUInterface {
-  #memoryController: MemoryController;
   #registers: Map<number, number>
   #registerMemory: Memory;
+  #memoryController: MemoryController;
   #dataProcessingTraps: Record<number, Trap>;
   #singleDataTransferTraps: Record<number, Trap>;
   #blockDataTransferTraps: Record<number, Trap>;
@@ -22,6 +23,8 @@ export class CPU implements CPUInterface {
   #cylces: number;
 
   constructor(memoryController: MemoryController) {
+    this.#registers = REGISTERS
+    this.#registerMemory = new Memory(this.#registers.size * 4);
     this.#memoryController = memoryController;
 
     this.#dataProcessingTraps = {
@@ -62,8 +65,6 @@ export class CPU implements CPUInterface {
       [BRANCH_EXCHANGE]: this.#BXTrap,
     }
 
-    this.#registers = REGISTERS
-
     this.#conditionHandlers = {
       [AL]: () => true,
       [EQ]: () => this.#getZeroFlag() === 1,
@@ -74,11 +75,8 @@ export class CPU implements CPUInterface {
       [LT]: () => this.#getNegativeFlag() !== this.#getOverflowFlag(),
     }
 
-    const registerMemorySize = this.#registers.size * 4;
-
     this.#cylces = 0;
     this.#pipeline = { fetch: null, decode: null, execute: null };
-    this.#registerMemory = new Memory(registerMemorySize);
 
     /* Start in user mode */
     this.#setMode(USER);
@@ -100,7 +98,7 @@ export class CPU implements CPUInterface {
       if (!name.includes('_')) {
         const value = this.#getRegister(register);
 
-        let line = `${name}:${' '.repeat(5 - name.length)}0x${value.toString(16).padStart(8, '0')} `;
+        let line = `${name}:${' '.repeat(5 - name.length)}${formatHex(value)} `;
 
         if (register === CPSR) {
           line += this.#getContentsPSR(register);
@@ -128,13 +126,13 @@ export class CPU implements CPUInterface {
     const register = this.#getSPSR()
     const value = register === SPSR ? 0 : this.#getRegister(register);
     const contents = register === SPSR ? '....' : this.#getContentsPSR(register)
-    const line = `${name}:${' '.repeat(5 - name.length)}0x${value.toString(16).padStart(8, '0')} ${contents}`
+    const line = `${name}:${' '.repeat(5 - name.length)}${formatHex(value)} ${contents}`
 
     process.stdout.write(`${line}\n\n`);
   }
 
   /**
-    ARM processors (in ARM state), the CPU uses a three-stage pipeline.
+    The CPU uses a three-stage pipeline.
     It fetches, decodes, and executes instructions in parallel.
     This means that at any given moment, the CPU is working on three instructions simultaneously:
 

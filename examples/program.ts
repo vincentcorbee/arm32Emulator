@@ -45,7 +45,6 @@ input.on('data', (data) => {
     case '\r': {
       cpu.cycle()
       cpu.viewRegisters()
-
       break;
     }
   }

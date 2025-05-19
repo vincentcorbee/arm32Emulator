@@ -4,7 +4,7 @@ import { b, bx, ldm, ldr, mov, stm, str, svc } from "../../instructions";
 import { cmp } from "../../instructions/data-processing/arithmetic/cmp";
 import { dataProcessing } from "../../instructions/data-processing/data-processing";
 import { mul } from "../../instructions/multiply";
-import { Memory } from "../types";
+import { Memory } from "../memory/types";
 import { evalExpression } from "./eval-expression";
 import { program } from "./parsers";
 import { preProcess, PreProcessOptions } from "./pre-process";

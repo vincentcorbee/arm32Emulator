@@ -4,7 +4,7 @@ import { b, bx, ldr, mul, str, svc } from "../../instructions";
 import { blockDataTransfer } from "../../instructions/block-data-transfer/block-data-transfer";
 import { dataProcessing } from "../../instructions/data-processing/data-processing";
 import { char, either, map } from "../parser-combinators";
-import { Memory } from "../types";
+import { Memory } from "../memory/types";
 import { AssemblerArgs, getPreprocessOptions, VECTOR_TABLE_END } from "./assemble";
 import { evalExpression } from "./eval-expression";
 import { program } from "./parsers";

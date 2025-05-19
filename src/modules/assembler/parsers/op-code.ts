@@ -1,6 +1,6 @@
 import { OpCodeNameToCode } from "../../../constants/maps";
 import { map } from "../../parser-combinators";
-import { OpCodes } from "../../types";
+import { OpCodes } from "../../cpu/types";
 import { upperOrLower } from "./upper-or-lower";
 
 export const opCode = (opCode: OpCodes) => map(
