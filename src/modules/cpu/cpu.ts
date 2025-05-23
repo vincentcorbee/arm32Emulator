@@ -4,7 +4,7 @@ import { CPSR, PC, R0, R1, R2, R7, SP, SPSR_SVC } from "../../constants/codes";
 import { EXIT_SYS_CALL, WRITE_SYS_CALL } from "../../constants/codes/sys-calls";
 import { CPUInterface, Pipeline, Trap, Traps } from "./types";
 import { RegisterCodesToNames } from "../../constants/maps";
-import { MemoryController } from "../memory/types";
+import { MemoryController } from "../memory-controller/types";
 import { N as N_FLAG, C as C_FLAG, Z as Z_FLAG, V as V_FLAG } from '../../constants/mnemonics/flags'
 import { REGISTERS } from "./constants";
 import { formatHex } from "../../utils";

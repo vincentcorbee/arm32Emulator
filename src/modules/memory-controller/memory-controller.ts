@@ -62,7 +62,7 @@ export class MemoryController implements MemoryControllerInterface{
     const region = this.#regions.find(region => address >= region.start && address <= region.end)
 
     if (!region) {
-      throw new Error(`No device mapped at address ${address.toString(16)}`)
+      throw new Error(`No device mapped at address: ${address.toString(16)}`)
     }
 
     return region
