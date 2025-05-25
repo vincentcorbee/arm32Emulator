@@ -1,6 +1,6 @@
 import { Region, DeviceInterface, MemoryControllerInterface } from "./types"
 
-export class MemoryController implements MemoryControllerInterface{
+export class MemoryController implements MemoryControllerInterface {
   #regions: Region[]
 
   constructor() {
@@ -45,17 +45,17 @@ export class MemoryController implements MemoryControllerInterface{
     return device.readUint32(mappedAddress)
   }
 
+  getDevice(address: number): DeviceInterface {
+    const { device } = this.#findRegion(address)
+
+    return device
+  }
+
   getBufferSlice(address: number, length: number): ArrayBuffer {
     const { device, remap, start } = this.#findRegion(address)
     const mappedAddress = remap ? address - start : address
 
     return device.getBufferSlice(mappedAddress, length)
-  }
-
-  getDevice(address: number): DeviceInterface {
-    const { device } = this.#findRegion(address)
-
-    return device
   }
 
   #findRegion(address: number): Region {
