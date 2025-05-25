@@ -13,7 +13,6 @@ export type DeviceInterface = {
   readUint32: (address: number) => number
   readUint8: (address: number) => number
   writeUint8: (address: number, value: number) => void
-  readChar: (address: number) => string
   getBufferSlice: (address: number, length: number) => ArrayBuffer
 }
 
