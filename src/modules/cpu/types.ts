@@ -12,6 +12,22 @@ export type Trap = (instruction: number) => void
 
 export type Traps = Trap | ((instruction: number) => Trap)
 
+export type InstructionTraps = Record<number, Traps>
+
+export type BlockDataTransferTraps = Record<number, Traps>
+
+export type SingleDataTransferTraps = Record<number, Traps>
+
+export type DataProcessingTraps = Record<number, Traps>
+
+export type ConditionHandler = () => boolean
+
+export type ConditionHandlers = Record<number, ConditionHandler>
+
+export type ShiftHandler = (value: number, shift: number) => number
+
+export type ShiftHandlers = Record<number, ShiftHandler>
+
 export type Pipeline = { fetch: number | null, decode: number | null, execute: (() => void) | null }
 
 export type Registers =
@@ -44,6 +60,8 @@ export type Registers =
   | 'SPSR_SVC'
   | 'SPSR_UND'
   | 'SPSR'
+
+export type RegistersMap = Map<number, number>
 
 export type OpCodes =
   | 'AND'

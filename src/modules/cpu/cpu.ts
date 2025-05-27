@@ -2,7 +2,7 @@ import { Memory } from "../memory";
 import { ADD, AL, BLOCK_DATA_TRANSFER, BRANCH, BRANCH_EXCHANGE, C, CMP, DATA_PROCESSING_IMMEDIATE, DATA_PROCESSING_REGISTER, EQ, GE, GT, LE, LR, LT, MOV, MULTIPLY, MVN, N, NE, R13_SVC, R13_UND, R14_SVC, R14_UND, SINGLE_DATA_TRANSFER_IMMIDIATE, SINGLE_DATA_TRANSFER_REGISTER, SPSR, SPSR_UND, SUB, SUPERVISOR, SUPERVISOR_CALL, UND, UNDEFINED, USER, V, Z } from "../../constants/codes";
 import { CPSR, PC, R0, R1, R2, R7, SP, SPSR_SVC } from "../../constants/codes";
 import { EXIT_SYS_CALL, WRITE_SYS_CALL } from "../../constants/codes/sys-calls";
-import { CPUInterface, Pipeline, Trap, Traps } from "./types";
+import { BlockDataTransferTraps, ConditionHandlers, CPUInterface, DataProcessingTraps, InstructionTraps, Pipeline, RegistersMap, ShiftHandlers, SingleDataTransferTraps, Trap, Traps } from "./types";
 import { RegisterCodesToNames } from "../../constants/maps";
 import { MemoryController } from "../memory-controller/types";
 import { N as N_FLAG, C as C_FLAG, Z as Z_FLAG, V as V_FLAG } from '../../constants/mnemonics/flags'
@@ -10,22 +10,24 @@ import { REGISTERS } from "./constants";
 import { formatHex } from "../../utils";
 
 export class CPU implements CPUInterface {
-  #registers: Map<number, number>
+  #registers: RegistersMap
   #registerMemory: Memory;
   #memoryController: MemoryController;
-  #dataProcessingTraps: Record<number, Trap>;
-  #singleDataTransferTraps: Record<number, Trap>;
-  #blockDataTransferTraps: Record<number, Trap>;
-  #instructionTraps: Record<number, Traps>;
-  #conditionHandlers: Record<number, () => boolean>;
-  #shiftHandlers: Record<number, (value: number, shift: number) => number>;
   #pipeline: Pipeline;
   #cylces: number;
+  #dataProcessingTraps: DataProcessingTraps;
+  #singleDataTransferTraps: SingleDataTransferTraps;
+  #blockDataTransferTraps: BlockDataTransferTraps;
+  #instructionTraps: InstructionTraps;
+  #conditionHandlers: ConditionHandlers;
+  #shiftHandlers: ShiftHandlers;
 
   constructor(memoryController: MemoryController) {
     this.#registers = REGISTERS
     this.#registerMemory = new Memory(this.#registers.size * 4);
     this.#memoryController = memoryController;
+    this.#pipeline = { fetch: null, decode: null, execute: null };
+    this.#cylces = 0;
 
     this.#dataProcessingTraps = {
       [MOV]: this.#MOVTrap,
@@ -45,13 +47,6 @@ export class CPU implements CPUInterface {
       [0]: this.#STMTrap,
     }
 
-    this.#shiftHandlers = {
-      [0]: this.#lsl,
-      [1]: this.#lsr,
-      [2]: this.#asr,
-      [3]: this.#ror,
-    }
-
     this.#instructionTraps = {
       [DATA_PROCESSING_REGISTER]: this.#dataProcessingTrap,
       [DATA_PROCESSING_IMMEDIATE]: this.#dataProcessingTrap,
@@ -65,18 +60,22 @@ export class CPU implements CPUInterface {
       [BRANCH_EXCHANGE]: this.#BXTrap,
     }
 
-    this.#conditionHandlers = {
-      [AL]: () => true,
-      [EQ]: () => this.#getZeroFlag() === 1,
-      [NE]: () => this.#getZeroFlag() === 0,
-      [GE]: () => this.#getNegativeFlag() === this.#getOverflowFlag(),
-      [GT]: () => this.#getZeroFlag() === 0 && (this.#getNegativeFlag() ===  this.#getOverflowFlag()),
-      [LE]: () => this.#getZeroFlag() === 1 || (this.#getNegativeFlag() !== this.#getOverflowFlag()),
-      [LT]: () => this.#getNegativeFlag() !== this.#getOverflowFlag(),
+    this.#shiftHandlers = {
+      [0]: this.#lsl,
+      [1]: this.#lsr,
+      [2]: this.#asr,
+      [3]: this.#ror,
     }
 
-    this.#cylces = 0;
-    this.#pipeline = { fetch: null, decode: null, execute: null };
+    this.#conditionHandlers = {
+      [AL]: this.#al,
+      [EQ]: this.#eq,
+      [NE]: this.#ne,
+      [GE]: this.#ge,
+      [GT]: this.#gt,
+      [LE]: this.#le,
+      [LT]: this.#lt,
+    }
 
     /* Start in user mode */
     this.#setMode(USER);
@@ -694,30 +693,31 @@ export class CPU implements CPUInterface {
     return registerValue
   }
 
-  #shift = (value: number, shift: number, shiftType: number): number => {
-    return this.#shiftHandlers[shiftType](value, shift);
+  #shift(value: number, shift: number, shiftType: number): number {
+    return this.#shiftHandlers[shiftType](value, shift)
+  };
+
+  #ror = (value: number, shift: number): number => (value >>> shift) | (value << (32 - shift)) >>> 0;
+  #lsl = (value: number, shift: number): number => value << shift;
+  #lsr = (value: number, shift: number): number => value >>> shift;
+  #asr = (value: number, shift: number): number => value >> shift;
+
+  #getConditionHandlers(condition: number) {
+    return this.#conditionHandlers[condition]
   }
 
-  #ror = (value: number, shift: number): number => {
-    return (value >>> shift) | (value << (32 - shift)) >>> 0;
-  }
+  #al = () => true
+  #eq = () => this.#getZeroFlag() === 1
+  #ne = () => this.#getZeroFlag() === 0
+  #ge = () => this.#getNegativeFlag() === this.#getOverflowFlag()
+  #gt = () => this.#getZeroFlag() === 0 && (this.#getNegativeFlag() ===  this.#getOverflowFlag())
+  #le = () => this.#getZeroFlag() === 1 || (this.#getNegativeFlag() !== this.#getOverflowFlag())
+  #lt = () => this.#getNegativeFlag() !== this.#getOverflowFlag()
 
-  #lsl = (value: number, shift: number): number => {
-    return value << shift;
-  }
+  #shouldExecute(condition: number): boolean {
+    const conditionHandler = this.#getConditionHandlers(condition);
 
-  #lsr = (value: number, shift: number): number => {
-    return value >>> shift;
-  }
-
-  #asr = (value: number, shift: number): number => {
-    return value >> shift;
-  }
-
-  #shouldExecute(cond: number): boolean {
-    const condition = this.#conditionHandlers[cond];
-
-    if (typeof condition === 'function') return condition();
+    if (typeof conditionHandler === 'function') return conditionHandler();
 
     return false
   }
