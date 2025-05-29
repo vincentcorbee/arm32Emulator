@@ -1,8 +1,8 @@
 import { Memory } from "../memory";
-import { ADD, AL, BLOCK_DATA_TRANSFER, BRANCH, BRANCH_EXCHANGE, C, CMP, DATA_PROCESSING_IMMEDIATE, DATA_PROCESSING_REGISTER, EQ, GE, GT, LE, LR, LT, MOV, MULTIPLY, MVN, N, NE, R13_SVC, R13_UND, R14_SVC, R14_UND, SINGLE_DATA_TRANSFER_IMMIDIATE, SINGLE_DATA_TRANSFER_REGISTER, SPSR, SPSR_UND, SUB, SUPERVISOR, SUPERVISOR_CALL, UND, UNDEFINED, USER, V, Z } from "../../constants/codes";
+import { ADD, AL, BLOCK_DATA_TRANSFER, BRANCH, BRANCH_EXCHANGE, C, CMP, DATA_PROCESSING_IMMEDIATE, DATA_PROCESSING_REGISTER, EQ, GE, GT, LE, LR, LT, MOV, MULTIPLY, MVN, N, NE, R14_SVC, R14_UND, SINGLE_DATA_TRANSFER_IMMIDIATE, SINGLE_DATA_TRANSFER_REGISTER, SPSR, SPSR_UND, SUB, SUPERVISOR, SUPERVISOR_CALL, UND, UNDEFINED, USER, V, Z } from "../../constants/codes";
 import { CPSR, PC, R0, R1, R2, R7, SP, SPSR_SVC } from "../../constants/codes";
 import { EXIT_SYS_CALL, WRITE_SYS_CALL } from "../../constants/codes/sys-calls";
-import { BlockDataTransferTraps, ConditionHandlers, CPUInterface, DataProcessingTraps, InstructionTraps, Pipeline, RegistersMap, ShiftHandlers, SingleDataTransferTraps, Trap, Traps } from "./types";
+import { BlockDataTransferHandlers, ConditionHandlers, CPUInterface, DataProcessingHandlers, InstructionHandlers, Pipeline, RegistersMap, ShiftHandlers, SingleDataTransferHandlers } from "./types";
 import { RegisterCodesToNames } from "../../constants/maps";
 import { MemoryController } from "../memory-controller/types";
 import { N as N_FLAG, C as C_FLAG, Z as Z_FLAG, V as V_FLAG } from '../../constants/mnemonics/flags'
@@ -15,10 +15,10 @@ export class CPU implements CPUInterface {
   #memoryController: MemoryController;
   #pipeline: Pipeline;
   #cylces: number;
-  #dataProcessingTraps: DataProcessingTraps;
-  #singleDataTransferTraps: SingleDataTransferTraps;
-  #blockDataTransferTraps: BlockDataTransferTraps;
-  #instructionTraps: InstructionTraps;
+  #instructionHandlers: InstructionHandlers;
+  #dataProcessingHandlers: DataProcessingHandlers;
+  #singleDataTransferHandlers: SingleDataTransferHandlers;
+  #blockDataTransferHandlers: BlockDataTransferHandlers;
   #conditionHandlers: ConditionHandlers;
   #shiftHandlers: ShiftHandlers;
 
@@ -29,35 +29,35 @@ export class CPU implements CPUInterface {
     this.#pipeline = { fetch: null, decode: null, execute: null };
     this.#cylces = 0;
 
-    this.#dataProcessingTraps = {
-      [MOV]: this.#MOVTrap,
-      [MVN]: this.#MVNTrap,
-      [ADD]: this.#ADDTrap,
-      [SUB]: this.#SUBTrap,
-      [CMP]: this.#CMPTrap,
-    }
-
-    this.#singleDataTransferTraps = {
-      [1]: this.#LDRTrap,
-      [0]: this.#STRTrap,
-    }
-
-    this.#blockDataTransferTraps = {
-      [1]: this.#LDMTrap,
-      [0]: this.#STMTrap,
-    }
-
-    this.#instructionTraps = {
-      [DATA_PROCESSING_REGISTER]: this.#dataProcessingTrap,
-      [DATA_PROCESSING_IMMEDIATE]: this.#dataProcessingTrap,
+    this.#instructionHandlers = {
+      [DATA_PROCESSING_REGISTER]: this.#dataProcessingHandler,
+      [DATA_PROCESSING_IMMEDIATE]: this.#dataProcessingHandler,
       [SUPERVISOR_CALL]: this.#SVCTrap,
-      [SINGLE_DATA_TRANSFER_REGISTER]: this.#singleDataTransferTrap,
-      [SINGLE_DATA_TRANSFER_IMMIDIATE]: this.#singleDataTransferTrap,
-      [BRANCH]: this.#BTrap,
-      [BLOCK_DATA_TRANSFER]: this.#blockDataTransferTrap,
-      [MULTIPLY]: this.#MULTrap,
+      [SINGLE_DATA_TRANSFER_REGISTER]: this.#singleDataTransferHandler,
+      [SINGLE_DATA_TRANSFER_IMMIDIATE]: this.#singleDataTransferHandler,
+      [BRANCH]: this.#BHandler,
+      [BLOCK_DATA_TRANSFER]: this.#blockDataTransferHandler,
+      [MULTIPLY]: this.#MULHandler,
       [UNDEFINED]: this.#undefinedTrap,
-      [BRANCH_EXCHANGE]: this.#BXTrap,
+      [BRANCH_EXCHANGE]: this.#BXHandler,
+    }
+
+    this.#dataProcessingHandlers = {
+      [MOV]: this.#MOVHandler,
+      [MVN]: this.#MVNHandler,
+      [ADD]: this.#ADDHandler,
+      [SUB]: this.#SUBHandler,
+      [CMP]: this.#CMPHandler,
+    }
+
+    this.#singleDataTransferHandlers = {
+      [1]: this.#LDRHandler,
+      [0]: this.#STRHandler,
+    }
+
+    this.#blockDataTransferHandlers = {
+      [1]: this.#LDMHandler,
+      [0]: this.#STMHandler,
     }
 
     this.#shiftHandlers = {
@@ -173,16 +173,16 @@ export class CPU implements CPUInterface {
     result was zero, and the N flag will be set to the value of bit 31 of the result (indicating a negative result if
     the operands are considered to be 2's complement signed).
   */
-  #dataProcessingTrap = (instruction: number) => {
-    return this.#dataProcessingTraps[instruction >> 21 & 0xf];
+  #dataProcessingHandler = (instruction: number) => {
+    return this.#dataProcessingHandlers[instruction >> 21 & 0xf];
   }
 
   /**
     4x   x x x x x x x x 4x 4x 12x
     Cond 0 1 I P U B W L Rn Rd Offset
   */
-  #singleDataTransferTrap = (instruction: number) => {
-    return this.#singleDataTransferTraps[instruction >> 20 & 0x1];
+  #singleDataTransferHandler = (instruction: number) => {
+    return this.#singleDataTransferHandlers[instruction >> 20 & 0x1];
   }
 
    /**
@@ -200,10 +200,10 @@ export class CPU implements CPUInterface {
    * Empty descending stack
    * Post-decrement addressing
    */
-   #blockDataTransferTrap = (instruction: number) => {
+   #blockDataTransferHandler = (instruction: number) => {
     const loadStore = instruction >> 20 & 0x1;
 
-    return this.#blockDataTransferTraps[loadStore];
+    return this.#blockDataTransferHandlers[loadStore];
   }
 
   /**
@@ -212,7 +212,7 @@ export class CPU implements CPUInterface {
    * 4x   x x x x 24x
    * Cond 1 0 1 L offset
    */
-  #BTrap = (instruction: number): void => {
+  #BHandler = (instruction: number): void => {
     const cond = instruction >> 28 & 0xf;
 
     if (!this.#shouldExecute(cond)) return
@@ -234,7 +234,7 @@ export class CPU implements CPUInterface {
   /**
    * BX{cond} Rn
    */
-  #BXTrap = (instruction: number): void => {
+  #BXHandler = (instruction: number): void => {
     const cond = instruction >> 28 & 0xf;
 
     if (!this.#shouldExecute(cond)) return
@@ -249,7 +249,7 @@ export class CPU implements CPUInterface {
   /**
    * CMP{cond} Rn, <Op2>
    */
-  #CMPTrap = (instruction: number): void => {
+  #CMPHandler = (instruction: number): void => {
     const cond = instruction >> 28 & 0xf;
 
     if (!this.#shouldExecute(cond)) return
@@ -271,7 +271,7 @@ export class CPU implements CPUInterface {
     4x   2x x 4x     x 4x 4x 12x
     Cond 00 I Opcode S Rn Rd Op2
   */
-  #MOVTrap = (instruction: number): void => {
+  #MOVHandler = (instruction: number): void => {
     const cond = instruction >> 28 & 0xf;
 
     if (!this.#shouldExecute(cond)) return
@@ -294,7 +294,7 @@ export class CPU implements CPUInterface {
     4x   2x x 4x     x 4x 4x 12x
     Cond 00 I Opcode S Rn Rd Op2
   */
-  #MVNTrap = (instruction: number): void => {
+  #MVNHandler = (instruction: number): void => {
     const cond = instruction >> 28 & 0xf;
 
     if (!this.#shouldExecute(cond)) return
@@ -317,7 +317,7 @@ export class CPU implements CPUInterface {
    * 4x   2x x 4x     x 4x 4x 12x
    * Cond 00 I Opcode S Rn Rd Op2
    */
-  #ADDTrap = (instruction: number): void => {
+  #ADDHandler = (instruction: number): void => {
     const cond = instruction >> 28 & 0xf;
 
     if (!this.#shouldExecute(cond)) return
@@ -345,7 +345,7 @@ export class CPU implements CPUInterface {
    * 4x   2x x 4x     x 4x 4x 12x
    * Cond 00 I Opcode S Rn Rd Op2
    */
-  #SUBTrap = (instruction: number): void => {
+  #SUBHandler = (instruction: number): void => {
     const cond = instruction >> 28 & 0xf;
 
     if (!this.#shouldExecute(cond)) return
@@ -374,7 +374,7 @@ export class CPU implements CPUInterface {
    * 31  28 27             22 21 20 19 16 15 12 11 8 7     4 3  0
    *  Cond  0  0  0  0  0  0  A  S   Rd    Rn    Rs  1 0 0 1  Rm
    */
-  #MULTrap = (instruction: number): void => {
+  #MULHandler = (instruction: number): void => {
     const cond = instruction >> 28 & 0xf;
 
     if (!this.#shouldExecute(cond)) return
@@ -406,7 +406,7 @@ export class CPU implements CPUInterface {
    * 4x   x x x x x x x x 4x 4x 12x
    * Cond 0 1 I P U B W L Rn Rd Offset
    */
-  #LDRTrap = (instruction: number): void => {
+  #LDRHandler = (instruction: number): void => {
     const cond = instruction >> 28 & 0xf;
 
     if (!this.#shouldExecute(cond)) return
@@ -440,7 +440,7 @@ export class CPU implements CPUInterface {
    * 4x   x x x x x x x x 4x 4x 12x
    * Cond 0 1 I P U B W L Rn Rd Offset
    */
-  #STRTrap = (instruction: number): void => {
+  #STRHandler = (instruction: number): void => {
     const cond = instruction >> 28 & 0xf;
 
     if (!this.#shouldExecute(cond)) return
@@ -480,7 +480,7 @@ export class CPU implements CPUInterface {
    *   Cond     100    P  U  S  W  L   Rn    Register list
    *
    */
-  #STMTrap = (instruction: number): void => {
+  #STMHandler = (instruction: number): void => {
     const cond = instruction >> 28 & 0xf;
 
     if (!this.#shouldExecute(cond)) return
@@ -526,7 +526,7 @@ export class CPU implements CPUInterface {
    * 31   28  27   25 24 23 22 21 20 19  16  15          0
    *   Cond     100    P  U  S  W  L   Rn    Register list
    */
-  #LDMTrap = (instruction: number): void => {
+  #LDMHandler = (instruction: number): void => {
     const cond = instruction >> 28 & 0xf;
 
     if (!this.#shouldExecute(cond)) return
@@ -872,10 +872,10 @@ export class CPU implements CPUInterface {
       classCode = instruction >>> 25 & 0x7
     }
 
-    const trap = (this.#instructionTraps[classCode] || this.#undefinedTrap) as Traps;
+    const handler = (this.#instructionHandlers[classCode] || this.#undefinedTrap);
 
     this.#pipeline.execute = () => {
-      let result = trap(instruction);
+      let result = handler(instruction);
 
       while (typeof result === 'function') {
         result = result(instruction);

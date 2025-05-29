@@ -8,17 +8,17 @@ export interface CPUInterface {
 
 export type CPU = CPUInterface;
 
-export type Trap = (instruction: number) => void
+export type Handler = (instruction: number) => void
 
-export type Traps = Trap | ((instruction: number) => Trap)
+export type Handlers = Handler | ((instruction: number) => Handler)
 
-export type InstructionTraps = Record<number, Traps>
+export type InstructionHandlers = Record<number, Handlers>
 
-export type BlockDataTransferTraps = Record<number, Traps>
+export type BlockDataTransferHandlers = Record<number, Handlers>
 
-export type SingleDataTransferTraps = Record<number, Traps>
+export type SingleDataTransferHandlers = Record<number, Handlers>
 
-export type DataProcessingTraps = Record<number, Traps>
+export type DataProcessingHandlers = Record<number, Handlers>
 
 export type ConditionHandler = () => boolean
 
