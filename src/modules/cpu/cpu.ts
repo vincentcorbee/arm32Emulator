@@ -1,12 +1,16 @@
 import { Memory } from "../memory";
-import { ADD, AL, BLOCK_DATA_TRANSFER, BRANCH, BRANCH_EXCHANGE, C, CMP, DATA_PROCESSING_IMMEDIATE, DATA_PROCESSING_REGISTER, EQ, GE, GT, LE, LR, LT, MOV, MULTIPLY, MVN, N, NE, R14_SVC, R14_UND, SINGLE_DATA_TRANSFER_IMMIDIATE, SINGLE_DATA_TRANSFER_REGISTER, SPSR, SPSR_UND, SUB, SUPERVISOR, SUPERVISOR_CALL, UND, UNDEFINED, USER, V, Z } from "../../constants/codes";
-import { CPSR, PC, R0, R1, R2, R7, SP, SPSR_SVC } from "../../constants/codes";
-import { EXIT_SYS_CALL, WRITE_SYS_CALL } from "../../constants/codes/sys-calls";
 import { BlockDataTransferHandlers, ConditionHandlers, CPUInterface, DataProcessingHandlers, InstructionHandlers, Pipeline, RegistersMap, ShiftHandlers, SingleDataTransferHandlers } from "./types";
-import { RegisterCodesToNames } from "../../constants/maps";
-import { MemoryController } from "../memory-controller/types";
-import { N as N_FLAG, C as C_FLAG, Z as Z_FLAG, V as V_FLAG } from '../../constants/mnemonics/flags'
 import { REGISTERS } from "./constants";
+import { EXIT_SYS_CALL, WRITE_SYS_CALL } from "../../constants/codes/sys-calls";
+import { BLOCK_DATA_TRANSFER, BRANCH, BRANCH_EXCHANGE, DATA_PROCESSING_IMMEDIATE, DATA_PROCESSING_REGISTER, MULTIPLY, SINGLE_DATA_TRANSFER_IMMIDIATE, SINGLE_DATA_TRANSFER_REGISTER, SUPERVISOR_CALL, UNDEFINED } from "../../constants/codes/class-codes";
+import { SUPERVISOR, UND, USER } from "../../constants/codes/modes";
+import { C, N, V, Z } from "../../constants/codes/flags";
+import { MemoryController } from "../memory-controller/types";
+import { AL, EQ, GE, GT, LE, LT, NE } from "../../constants/codes/condition";
+import { ADD, CMP, MOV, MVN, SUB } from "../../constants/codes/op-codes";
+import { CPSR, LR, PC, R0, R1, R14_SVC, R14_UND, R2, R7, SP, SPSR, SPSR_SVC, SPSR_UND } from "../../constants/codes/registers";
+import { N as N_FLAG, C as C_FLAG, Z as Z_FLAG, V as V_FLAG } from '../../constants/mnemonics/flags'
+import { RegisterCodesToNames } from "../../constants/maps";
 import { formatHex } from "../../utils";
 
 export class CPU implements CPUInterface {
