@@ -819,6 +819,7 @@ export class CPU implements CPUInterface {
     return contents
   }
 
+
   /**
    * Resets the pipeline which is needed when we branch to a new address.
    */
@@ -826,6 +827,19 @@ export class CPU implements CPUInterface {
     this.#pipeline.fetch = null;
     this.#pipeline.decode = null;
     this.#pipeline.execute = null;
+  }
+
+  #getClassCode(instruction: number): number {
+    if ((instruction >>> 21 & 0x3f) === 0 && (instruction >>> 4 & 0xf) === MULTIPLY) {
+      return MULTIPLY
+    } else if((instruction >>> 4 & 0xffffff) === BRANCH_EXCHANGE){
+      return BRANCH_EXCHANGE
+    } else if ((instruction >>> 24 & 0xf) === SUPERVISOR_CALL) {
+      return SUPERVISOR_CALL
+    }
+
+    return instruction >>> 25 & 0x7
+
   }
 
   /**
@@ -860,19 +874,8 @@ export class CPU implements CPUInterface {
       return;
     };
 
-    let classCode = UNDEFINED
-
-    if ((instruction >>> 21 & 0x3f) === 0 && (instruction >>> 4 & 0xf) === 0x9) {
-      classCode = MULTIPLY
-    } else if((instruction >>> 4 & 0xffffff) === BRANCH_EXCHANGE){
-      classCode = BRANCH_EXCHANGE
-    } else if ((instruction >>> 24 & 0xf) === SUPERVISOR_CALL) {
-      classCode = SUPERVISOR_CALL
-    } else if (instruction) {
-      classCode = instruction >>> 25 & 0x7
-    }
-
-    const handler = (this.#instructionHandlers[classCode] || this.#undefinedTrap);
+    const classCode = this.#getClassCode(instruction);
+    const handler = this.#instructionHandlers[classCode] || this.#undefinedTrap;
 
     this.#pipeline.execute = () => {
       let result = handler(instruction);
