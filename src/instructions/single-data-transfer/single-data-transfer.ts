@@ -1,5 +1,4 @@
-import { SINGLE_DATA_TRANSFER } from "../../constants/codes";
-import { AL } from "../../modules/instructions";
+import { AL, SINGLE_DATA_TRANSFER } from "../../constants/codes";
 import { Shift } from "../../modules/cpu/types";
 
 export type ImmidiateOffset = {
