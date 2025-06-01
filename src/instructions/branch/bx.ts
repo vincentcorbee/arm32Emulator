@@ -1,4 +1,4 @@
-import { AL } from "../../constants/codes"
+import { AL, BRANCH_EXCHANGE } from "../../constants/codes"
 
 export type BxArgs = {
   cond?: number
@@ -10,7 +10,7 @@ export const bx = (args: BxArgs) => {
 
   let value = (cond << 28) >>> 0
 
-  value = (value | (0b000100101111111111110001 << 4)) >>> 0
+  value = (value | (BRANCH_EXCHANGE << 4)) >>> 0
   value = (value | (rn & 0xf)) >>> 0
 
   return value
