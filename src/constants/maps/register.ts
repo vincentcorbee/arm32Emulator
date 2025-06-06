@@ -1,7 +1,7 @@
-import { Registers } from "../../modules/cpu/types";
+import { Register } from "../../modules/cpu/types";
 import { R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, FP, IP, SP, LR, PC, CPSR, R13_SVC, R14_SVC, SPSR_SVC, R11, R12, R13, R14, R15, SPSR, SPSR_UND, R14_UND, R13_UND } from "../codes/registers";
 
-export const RegisterCodesToNames: Record<number, Registers> = {
+export const RegisterCodesToNames: Record<number, Register> = {
   [R0]: 'R0',
   [R1]: 'R1',
   [R2]: 'R2',
@@ -28,7 +28,7 @@ export const RegisterCodesToNames: Record<number, Registers> = {
   [SPSR]: 'SPSR',
 }
 
-export const RegisterNameToCode: Record<Registers, number> = {
+export const RegisterNameToCode: Record<Register, number> = {
   'R0': R0,
   'R1': R1,
   'R2': R2,

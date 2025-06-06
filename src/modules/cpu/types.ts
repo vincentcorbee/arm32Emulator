@@ -1,3 +1,5 @@
+import * as CONDITION_CODES from '../../constants/codes/condition'
+
 export interface CPUInterface {
   run(): void
   cycle(): void
@@ -30,7 +32,21 @@ export type ShiftHandlers = Record<number, ShiftHandler>
 
 export type Pipeline = { fetch: number | null, decode: number | null, execute: (() => void) | null }
 
-export type Registers =
+export type Instruction = number
+
+export type ConditionCode = (typeof CONDITION_CODES)[keyof typeof CONDITION_CODES]
+
+export type RegisterShift = {
+  type: number, register: number
+}
+
+export type ImmediateShift = {
+  type: number, amount: number
+}
+
+export type Shift = RegisterShift & ImmediateShift
+
+export type Register =
   | 'R0'
   | 'R1'
   | 'R2'
@@ -63,7 +79,7 @@ export type Registers =
 
 export type RegistersMap = Map<number, number>
 
-export type OpCodes =
+export type OpCode =
   | 'AND'
   | 'SUB'
   | 'RSB'
@@ -93,7 +109,7 @@ export type OpCodes =
   | 'POP'
   | 'MUL'
 
-export type Conditions =
+export type Condition =
   | 'EQ'
   | 'NE'
   | 'CS'
@@ -110,14 +126,4 @@ export type Conditions =
   | 'LE'
   | 'AL'
 
-export type ShiftTypes = 'LSL' | 'LSR' | 'ASR' | 'ROR'
-
-export type RegisterShift = {
-  type: number, register: number
-}
-
-export type ImmediateShift = {
-  type: number, amount: number
-}
-
-export type Shift = RegisterShift & ImmediateShift
+export type ShiftType = 'LSL' | 'LSR' | 'ASR' | 'ROR'

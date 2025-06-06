@@ -1,8 +1,8 @@
 import { ASR, LSL, LSR, ROR } from "../mnemonics";
 import { LSL as LSL_CODE, LSR as LSR_CODE, ASR as ASR_CODE, ROR as ROR_CODE } from "../codes/shift-types";
-import { ShiftTypes } from "../../modules/cpu/types";
+import { ShiftType } from "../../modules/cpu/types";
 
-export const ShiftTypeNameToCode: Record<ShiftTypes, number> = {
+export const ShiftTypeNameToCode: Record<ShiftType, number> = {
   [LSL]: LSL_CODE,
   [LSR]: LSR_CODE,
   [ASR]: ASR_CODE,

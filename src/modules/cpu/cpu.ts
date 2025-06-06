@@ -1,5 +1,5 @@
 import { Memory } from "../memory";
-import { BlockDataTransferHandlers, ConditionHandlers, CPUInterface, DataProcessingHandlers, InstructionHandlers, Pipeline, RegistersMap, ShiftHandlers, SingleDataTransferHandlers } from "./types";
+import { BlockDataTransferHandlers, ConditionCode, ConditionHandlers, CPUInterface, DataProcessingHandlers, Instruction, InstructionHandlers, Pipeline, RegistersMap, ShiftHandlers, SingleDataTransferHandlers } from "./types";
 import { REGISTERS } from "./constants";
 import { EXIT_SYS_CALL, WRITE_SYS_CALL } from "../../constants/codes/sys-calls";
 import { BLOCK_DATA_TRANSFER, BRANCH, BRANCH_EXCHANGE, DATA_PROCESSING_IMMEDIATE, DATA_PROCESSING_REGISTER, MULTIPLY, SINGLE_DATA_TRANSFER_IMMIDIATE, SINGLE_DATA_TRANSFER_REGISTER, SUPERVISOR_CALL, UNDEFINED } from "../../constants/codes/class-codes";
@@ -165,6 +165,16 @@ export class CPU implements CPUInterface {
     }
   }
 
+  #getConditionCode(instruction: Instruction): ConditionCode {
+    const code = (instruction >> 28) & 0xf;
+
+    if (code >= EQ && code <= AL) {
+      return code as ConditionCode;
+    }
+
+    return AL
+  }
+
   /**
     4x   2x x 4x     x 4x 4x 12x
     Cond 00 I Opcode S Rn Rd Op2
@@ -204,7 +214,7 @@ export class CPU implements CPUInterface {
    * Empty descending stack
    * Post-decrement addressing
    */
-   #blockDataTransferHandler = (instruction: number) => {
+   #blockDataTransferHandler = (instruction: Instruction) => {
     const loadStore = instruction >> 20 & 0x1;
 
     return this.#blockDataTransferHandlers[loadStore];
@@ -216,10 +226,8 @@ export class CPU implements CPUInterface {
    * 4x   x x x x 24x
    * Cond 1 0 1 L offset
    */
-  #BHandler = (instruction: number): void => {
-    const cond = instruction >> 28 & 0xf;
-
-    if (!this.#shouldExecute(cond)) return
+  #BHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return
 
     const l = instruction >> 24 & 0x1;
     const offset = (instruction & 0xffffff);
@@ -238,28 +246,22 @@ export class CPU implements CPUInterface {
   /**
    * BX{cond} Rn
    */
-  #BXHandler = (instruction: number): void => {
-    const cond = instruction >> 28 & 0xf;
-
-    if (!this.#shouldExecute(cond)) return
+  #BXHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return
 
     const rn = instruction & 0xf;
 
     this.#setRegister(PC, this.#getRegister(rn));
-
     this.#flushPipeline()
   }
 
   /**
    * CMP{cond} Rn, <Op2>
    */
-  #CMPHandler = (instruction: number): void => {
-    const cond = instruction >> 28 & 0xf;
-
-    if (!this.#shouldExecute(cond)) return
+  #CMPHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return
 
     const rn = instruction >> 16 & 0xf;
-
     const left = this.#getRegister(rn);
     const right = this.#getSecondOperandValue(instruction);
     const result = left - right;
@@ -275,10 +277,8 @@ export class CPU implements CPUInterface {
     4x   2x x 4x     x 4x 4x 12x
     Cond 00 I Opcode S Rn Rd Op2
   */
-  #MOVHandler = (instruction: number): void => {
-    const cond = instruction >> 28 & 0xf;
-
-    if (!this.#shouldExecute(cond)) return
+  #MOVHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return
 
     const rd = instruction >> 12 & 0xf;
     const s = instruction >> 20 & 0x1;
@@ -298,10 +298,8 @@ export class CPU implements CPUInterface {
     4x   2x x 4x     x 4x 4x 12x
     Cond 00 I Opcode S Rn Rd Op2
   */
-  #MVNHandler = (instruction: number): void => {
-    const cond = instruction >> 28 & 0xf;
-
-    if (!this.#shouldExecute(cond)) return
+  #MVNHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return
 
     const rd = instruction >> 12 & 0xf;
     const s = instruction >> 20 & 0x1;
@@ -321,15 +319,12 @@ export class CPU implements CPUInterface {
    * 4x   2x x 4x     x 4x 4x 12x
    * Cond 00 I Opcode S Rn Rd Op2
    */
-  #ADDHandler = (instruction: number): void => {
-    const cond = instruction >> 28 & 0xf;
-
-    if (!this.#shouldExecute(cond)) return
+  #ADDHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return
 
     const s = instruction >> 20 & 0x1;
     const rn = instruction >> 16 & 0xf;
     const rd = instruction >> 12 & 0xf;
-
     const left = this.#getRegister(rn);
     const right = this.#getSecondOperandValue(instruction);
     const result = left + right;
@@ -349,15 +344,12 @@ export class CPU implements CPUInterface {
    * 4x   2x x 4x     x 4x 4x 12x
    * Cond 00 I Opcode S Rn Rd Op2
    */
-  #SUBHandler = (instruction: number): void => {
-    const cond = instruction >> 28 & 0xf;
-
-    if (!this.#shouldExecute(cond)) return
+  #SUBHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return
 
     const s = instruction >> 20 & 0x1;
     const rn = instruction >> 16 & 0xf;
     const rd = instruction >> 12 & 0xf;
-
     const left = this.#getRegister(rn);
     const right = this.#getSecondOperandValue(instruction);
     const result = left - right;
@@ -378,10 +370,8 @@ export class CPU implements CPUInterface {
    * 31  28 27             22 21 20 19 16 15 12 11 8 7     4 3  0
    *  Cond  0  0  0  0  0  0  A  S   Rd    Rn    Rs  1 0 0 1  Rm
    */
-  #MULHandler = (instruction: number): void => {
-    const cond = instruction >> 28 & 0xf;
-
-    if (!this.#shouldExecute(cond)) return
+  #MULHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return
 
     const a = instruction >> 21 & 0x1;
 
@@ -391,7 +381,6 @@ export class CPU implements CPUInterface {
     const rd = instruction >> 16 & 0xf;
     const rs = instruction >> 8 & 0xf;
     const rm = instruction & 0xf;
-
     const left = this.#getRegister(rm);
     const right = this.#getRegister(rs);
     const result = left * right;
@@ -410,10 +399,8 @@ export class CPU implements CPUInterface {
    * 4x   x x x x x x x x 4x 4x 12x
    * Cond 0 1 I P U B W L Rn Rd Offset
    */
-  #LDRHandler = (instruction: number): void => {
-    const cond = instruction >> 28 & 0xf;
-
-    if (!this.#shouldExecute(cond)) return
+  #LDRHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return
 
     const immediate = instruction >> 25 & 0x1;
     const loadStore = instruction >> 20 & 0x1;
@@ -444,10 +431,8 @@ export class CPU implements CPUInterface {
    * 4x   x x x x x x x x 4x 4x 12x
    * Cond 0 1 I P U B W L Rn Rd Offset
    */
-  #STRHandler = (instruction: number): void => {
-    const cond = instruction >> 28 & 0xf;
-
-    if (!this.#shouldExecute(cond)) return
+  #STRHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return
 
     const immediate = instruction >> 25 & 0x1;
     const loadStore = instruction >> 20 & 0x1;
@@ -484,10 +469,8 @@ export class CPU implements CPUInterface {
    *   Cond     100    P  U  S  W  L   Rn    Register list
    *
    */
-  #STMHandler = (instruction: number): void => {
-    const cond = instruction >> 28 & 0xf;
-
-    if (!this.#shouldExecute(cond)) return
+  #STMHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return
 
     const loadStore = instruction >> 20 & 0x1;
 
@@ -530,10 +513,8 @@ export class CPU implements CPUInterface {
    * 31   28  27   25 24 23 22 21 20 19  16  15          0
    *   Cond     100    P  U  S  W  L   Rn    Register list
    */
-  #LDMHandler = (instruction: number): void => {
-    const cond = instruction >> 28 & 0xf;
-
-    if (!this.#shouldExecute(cond)) return
+  #LDMHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return
 
     const loadStore = instruction >> 20 & 0x1;
 
@@ -583,10 +564,8 @@ export class CPU implements CPUInterface {
     To return from a SWI, use MOVS PC, R14_svc.
     This will restore the PC and CPSR and return to the instruction following the SWI.
   */
-  #SVCTrap = (instruction: number): void => {
-    const cond = instruction >> 28 & 0xf;
-
-    if (!this.#shouldExecute(cond)) return
+  #SVCTrap = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return
 
     const systemCall = this.#getRegister(R7)
     const cpsr = this.#getRegister(CPSR);
@@ -706,7 +685,7 @@ export class CPU implements CPUInterface {
   #lsr = (value: number, shift: number): number => value >>> shift;
   #asr = (value: number, shift: number): number => value >> shift;
 
-  #getConditionHandlers(condition: number) {
+  #getConditionHandlers(condition: ConditionCode) {
     return this.#conditionHandlers[condition]
   }
 
@@ -718,7 +697,8 @@ export class CPU implements CPUInterface {
   #le = () => this.#getZeroFlag() === 1 || (this.#getNegativeFlag() !== this.#getOverflowFlag())
   #lt = () => this.#getNegativeFlag() !== this.#getOverflowFlag()
 
-  #shouldExecute(condition: number): boolean {
+  #shouldExecute(instruction: Instruction): boolean {
+    const condition = this.#getConditionCode(instruction);
     const conditionHandler = this.#getConditionHandlers(condition);
 
     if (typeof conditionHandler === 'function') return conditionHandler();

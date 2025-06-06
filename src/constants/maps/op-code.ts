@@ -1,4 +1,4 @@
-import { OpCodes } from "../../modules/cpu/types";
+import { OpCode } from "../../modules/cpu/types";
 import { AND, SUB, RSB, ADD, ADC, SBC, RSC, TST, TEQ, CMP, CMN, ORR, MOV, BIC, MVN, B, BL, SVC, LDR, LDRB, STRB, STR, STM, LDM, BX, PUSH, POP, MUL } from "../codes/op-codes";
 import {
   AND as AND_NAME,
@@ -21,7 +21,7 @@ import {
   MUL as MUL_NAME
 } from "../mnemonics/op-codes";
 
-export const OpCodeNameToCode: Record<OpCodes, number> = {
+export const OpCodeNameToCode: Record<OpCode, number> = {
   [AND_NAME]: AND,
   [SUB_NAME]: SUB,
   'RSB': RSB,

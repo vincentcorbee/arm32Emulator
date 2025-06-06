@@ -1,6 +1,6 @@
 import { ShiftTypeNameToCode } from "../../../constants/maps";
 import { optional, map, sequence, or } from "../../parser-combinators";
-import { ShiftTypes } from "../../cpu/types";
+import { ShiftType } from "../../cpu/types";
 import { immidiateExpression } from "./expressions/immidiate-expression";
 import { optionalWhitespace } from "./optional-whitespace";
 import { register } from "./register";
@@ -20,7 +20,7 @@ export const shift = optional(
       )
     ), value => {
       const shiftSrc = value[4]
-      const type = ShiftTypeNameToCode[value[2] as ShiftTypes]
+      const type = ShiftTypeNameToCode[value[2] as ShiftType]
 
       if (shiftSrc.type === 'ImmidiateExpression') {
         return {

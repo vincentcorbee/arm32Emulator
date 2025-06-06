@@ -1,8 +1,8 @@
 import { AL, EQ, GE, GT, LE, LT } from "../mnemonics";
 import * as ConditionCodes from '../codes/condition'
-import { Conditions } from "../../modules/cpu/types";
+import { Condition } from "../../modules/cpu/types";
 
-export const ConditionNameToCode: Partial<Record<Conditions, number>> = {
+export const ConditionNameToCode: Partial<Record<Condition, number>> = {
   [EQ]: ConditionCodes.EQ,
   [AL]: ConditionCodes.AL,
   [GE]: ConditionCodes.GE,
