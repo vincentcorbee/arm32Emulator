@@ -1,6 +1,8 @@
 import { DATA_PROCESSING } from "../../constants/codes"
 import { AL } from "../../constants/codes/condition"
-import { ConditionCode, Instruction, Shift } from "../../modules/cpu/types";
+import { Instruction } from "../../modules/cpu/types";
+import { Condition } from "../../types/codes/condition";
+import { Shift } from "../../types/shift";
 
 export type Operand2Type = 'Register' | 'ImmidiateExpression'
 
@@ -12,7 +14,7 @@ export type Operand2 = {
 }
 
 export type DataProcessingArgs = {
-  cond?: ConditionCode;
+  cond?: Condition;
   i: number;
   opCode: number;
   s?: number;

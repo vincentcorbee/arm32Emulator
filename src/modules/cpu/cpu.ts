@@ -1,16 +1,20 @@
 import { Memory } from "../memory";
-import { BlockDataTransferHandlers, ConditionCode, ConditionHandlers, CPUInterface, DataProcessingHandlers, Instruction, InstructionHandlers, Pipeline, RegistersMap, ShiftHandlers, SingleDataTransferHandlers } from "./types";
+import { MemoryController } from "../memory-controller/types"
+import { BlockDataTransferHandlers, ConditionHandlers, CPUInterface, DataProcessingHandlers, Instruction, InstructionHandlers, Pipeline, RegistersMap, ShiftHandlers, SingleDataTransferHandlers } from "./types";
 import { REGISTERS } from "./constants";
-import { EXIT_SYS_CALL, WRITE_SYS_CALL } from "../../constants/codes/sys-calls";
-import { BLOCK_DATA_TRANSFER, BRANCH, BRANCH_EXCHANGE, DATA_PROCESSING_IMMEDIATE, DATA_PROCESSING_REGISTER, MULTIPLY, SINGLE_DATA_TRANSFER_IMMIDIATE, SINGLE_DATA_TRANSFER_REGISTER, SUPERVISOR_CALL, UNDEFINED } from "../../constants/codes/class-codes";
-import { SUPERVISOR, UND, USER } from "../../constants/codes/modes";
-import { C, N, V, Z } from "../../constants/codes/flags";
-import { MemoryController } from "../memory-controller/types";
-import { AL, EQ, GE, GT, LE, LT, NE } from "../../constants/codes/condition";
-import { ADD, CMP, MOV, MVN, SUB } from "../../constants/codes/op-codes";
 import { CPSR, LR, PC, R0, R1, R14_SVC, R14_UND, R2, R7, SP, SPSR, SPSR_SVC, SPSR_UND } from "../../constants/codes/registers";
+import { BLOCK_DATA_TRANSFER, BRANCH, BRANCH_EXCHANGE, DATA_PROCESSING_IMMEDIATE, DATA_PROCESSING_REGISTER, MULTIPLY, SINGLE_DATA_TRANSFER_IMMIDIATE, SINGLE_DATA_TRANSFER_REGISTER, SUPERVISOR_CALL, UNDEFINED } from "../../constants/codes/class-codes";
+import { C, N, V, Z } from "../../constants/codes/flags";
 import { N as N_FLAG, C as C_FLAG, Z as Z_FLAG, V as V_FLAG } from '../../constants/mnemonics/flags'
+import { AL, EQ, GE, GT, LE, LT, NE } from "../../constants/codes/condition";
+import { M, SUPERVISOR, UND, USER } from "../../constants/codes/modes";
+import { ADD, CMP, MOV, MVN, SUB } from "../../constants/codes/op-codes";
+import { ASR, LSL, LSR, ROR } from "../../constants/codes/shift-types";
+import { SHIFT_SOURCE_REGISTER } from "../../constants/codes/shift-source-types";
+import { EXIT_SYS_CALL, WRITE_SYS_CALL } from "../../constants/codes/sys-calls";
+import { Register } from "../../types/codes/register";
 import { RegisterCodesToNames } from "../../constants/maps";
+import { Condition } from "../../types/codes/condition";
 import { formatHex } from "../../utils";
 
 export class CPU implements CPUInterface {
@@ -64,13 +68,6 @@ export class CPU implements CPUInterface {
       [0]: this.#STMHandler,
     }
 
-    this.#shiftHandlers = {
-      [0]: this.#lsl,
-      [1]: this.#lsr,
-      [2]: this.#asr,
-      [3]: this.#ror,
-    }
-
     this.#conditionHandlers = {
       [AL]: this.#al,
       [EQ]: this.#eq,
@@ -79,6 +76,13 @@ export class CPU implements CPUInterface {
       [GT]: this.#gt,
       [LE]: this.#le,
       [LT]: this.#lt,
+    }
+
+    this.#shiftHandlers = {
+      [LSL]: this.#lsl,
+      [LSR]: this.#lsr,
+      [ASR]: this.#asr,
+      [ROR]: this.#ror,
     }
 
     /* Start in user mode */
@@ -95,7 +99,7 @@ export class CPU implements CPUInterface {
 
   viewRegisters(): void {
     this.#registers.keys().forEach((register) => {
-      const name = RegisterCodesToNames[register]
+      const name = RegisterCodesToNames[register as Register]
 
       /* Omit banked registers */
       if (!name.includes('_')) {
@@ -165,16 +169,6 @@ export class CPU implements CPUInterface {
     }
   }
 
-  #getConditionCode(instruction: Instruction): ConditionCode {
-    const code = (instruction >> 28) & 0xf;
-
-    if (code >= EQ && code <= AL) {
-      return code as ConditionCode;
-    }
-
-    return AL
-  }
-
   /**
     4x   2x x 4x     x 4x 4x 12x
     Cond 00 I Opcode S Rn Rd Op2
@@ -187,7 +181,7 @@ export class CPU implements CPUInterface {
     result was zero, and the N flag will be set to the value of bit 31 of the result (indicating a negative result if
     the operands are considered to be 2's complement signed).
   */
-  #dataProcessingHandler = (instruction: number) => {
+  #dataProcessingHandler = (instruction: Instruction) => {
     return this.#dataProcessingHandlers[instruction >> 21 & 0xf];
   }
 
@@ -195,7 +189,7 @@ export class CPU implements CPUInterface {
     4x   x x x x x x x x 4x 4x 12x
     Cond 0 1 I P U B W L Rn Rd Offset
   */
-  #singleDataTransferHandler = (instruction: number) => {
+  #singleDataTransferHandler = (instruction: Instruction) => {
     return this.#singleDataTransferHandlers[instruction >> 20 & 0x1];
   }
 
@@ -631,7 +625,7 @@ export class CPU implements CPUInterface {
    * To return from this trap after emulating the failed instruction, use MOVS PC,R14_und. This will restore the
    * CPSR and return to the instruction following the undefined instruction.
    */
-  #undefinedTrap = (instruction: number) => {
+  #undefinedTrap = (instruction: Instruction) => {
     /* 1. Save PC - 4, to allow for pipelining, in r14_und and save CPSR in SPSR_und */
     this.#setRegister(R14_UND, this.#getRegister(PC) - 4);
     this.#setRegister(SPSR_UND, this.#getRegister(CPSR));
@@ -652,7 +646,7 @@ export class CPU implements CPUInterface {
     this.#setRegister(CPSR, this.#getRegister(SPSR_UND));
   }
 
-  #getSecondOperandValue(instruction: number): number {
+  #getSecondOperandValue(instruction: Instruction): number {
     const immediate = instruction >> 25 & 0x1;
 
     if (immediate) {
@@ -667,8 +661,8 @@ export class CPU implements CPUInterface {
 
     if (shift) {
       const shiftType = instruction >> 5 & 0x3;
-      const shiftSourceType = instruction >> 4 & 0x1;
-      const shiftAmount = shiftSourceType === 1 ? this.#getRegister(instruction >> 8 & 0xf) : instruction >> 7 & 0x1f;
+      const shiftSource = instruction >> 4 & 0x1;
+      const shiftAmount = shiftSource === SHIFT_SOURCE_REGISTER ? this.#getRegister(instruction >> 8 & 0xf) : instruction >> 7 & 0x1f;
 
       return this.#shift(registerValue, shiftAmount, shiftType);
     }
@@ -677,7 +671,11 @@ export class CPU implements CPUInterface {
   }
 
   #shift(value: number, shift: number, shiftType: number): number {
-    return this.#shiftHandlers[shiftType](value, shift)
+    const handler = this.#shiftHandlers[shiftType]
+
+    if (typeof handler !== 'function') return value
+
+    return handler(value, shift)
   };
 
   #ror = (value: number, shift: number): number => (value >>> shift) | (value << (32 - shift)) >>> 0;
@@ -685,7 +683,26 @@ export class CPU implements CPUInterface {
   #lsr = (value: number, shift: number): number => value >>> shift;
   #asr = (value: number, shift: number): number => value >> shift;
 
-  #getConditionHandlers(condition: ConditionCode) {
+  #shouldExecute(instruction: Instruction): boolean {
+    const condition = this.#getConditionCode(instruction);
+    const conditionHandler = this.#getConditionHandler(condition);
+
+    if (typeof conditionHandler === 'function') return conditionHandler();
+
+    return false
+  }
+
+  #getConditionCode(instruction: Instruction): Condition {
+    const code = (instruction >> 28) & 0xf;
+
+    if (code >= EQ && code <= AL) {
+      return code as Condition;
+    }
+
+    return AL
+  }
+
+  #getConditionHandler(condition: Condition) {
     return this.#conditionHandlers[condition]
   }
 
@@ -697,23 +714,14 @@ export class CPU implements CPUInterface {
   #le = () => this.#getZeroFlag() === 1 || (this.#getNegativeFlag() !== this.#getOverflowFlag())
   #lt = () => this.#getNegativeFlag() !== this.#getOverflowFlag()
 
-  #shouldExecute(instruction: Instruction): boolean {
-    const condition = this.#getConditionCode(instruction);
-    const conditionHandler = this.#getConditionHandlers(condition);
-
-    if (typeof conditionHandler === 'function') return conditionHandler();
-
-    return false
-  }
-
   #setMode(mode: number): void {
     const cpsr = this.#getRegister(CPSR);
 
-    this.#setRegister(CPSR, (cpsr & ~0x1f) | mode);
+    this.#setRegister(CPSR, (cpsr & ~M) | mode);
   }
 
   #getMode(): number {
-    return this.#getRegister(CPSR) & 0x1f;
+    return this.#getRegister(CPSR) & M;
   }
 
   #getSPSR(): number {

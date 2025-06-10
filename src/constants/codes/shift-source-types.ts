@@ -1,0 +1,2 @@
+export const SHIFT_SOURCE_IMMEDIATE = 0x0;
+export const SHIFT_SOURCE_REGISTER = 0x1;

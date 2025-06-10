@@ -20,6 +20,8 @@
   11011   Undefined     PC, R14_und..R13_und, R12..R0   CPSR, SPSR_und
 */
 
+export const M = 0x1f
+
 export const USER = 0x10
 export const IQ = 0x11
 export const IRQ = 0x12

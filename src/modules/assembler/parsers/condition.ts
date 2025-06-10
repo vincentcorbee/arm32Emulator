@@ -1,7 +1,7 @@
 import { ConditionNameToCode } from "../../../constants/maps";
 import { AL, CC, CS, EQ, GE, GT, HI, LE, LS, LT, MI, NE, PL, VC, VS } from "../../../constants/mnemonics";
+import { Condition } from "../../../types/mnemonics/conditions";
 import { either, map, optional } from "../../parser-combinators";
-import { Condition } from "../../cpu/types";
 import { createNode } from "./mappers";
 import { upperOrLower } from "./upper-or-lower";
 
