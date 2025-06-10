@@ -1,3 +1,3 @@
-import { optional, whitespace } from "../../parser-combinators";
+import { optional, whitespace } from '../../parser-combinators';
 
-export const optionalWhitespace = optional(whitespace)
+export const optionalWhitespace = optional(whitespace);

@@ -9,7 +9,7 @@
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
     "sourceMap": true,
-    "allowJs": true,
+    "allowJs": true
   },
-  "include": ["src", "examples"],
+  "include": ["src", "examples", "test"]
 }

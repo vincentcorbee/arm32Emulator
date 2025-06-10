@@ -1,9 +1,9 @@
-import { formatHex } from "../../utils";
-import { MemoryInterface } from "./types";
+import { formatHex } from '../../utils';
+import { MemoryInterface } from './types';
 
 export class Memory implements MemoryInterface {
   #buffer: ArrayBuffer;
-  #dataView: DataView
+  #dataView: DataView;
   #endianness: 'little' | 'big';
 
   constructor(size: number, endianness: 'little' | 'big' = 'little') {
@@ -56,13 +56,13 @@ export class Memory implements MemoryInterface {
     const byteLength = this.#buffer.byteLength;
     const rows = Math.floor(byteLength / 16);
 
-    let currentAddress = 0
+    let currentAddress = 0;
 
-    for(let i = 0; i < rows; i ++) {
+    for (let i = 0; i < rows; i++) {
       let line = `${formatHex(currentAddress)}:`;
-      let chars = ''
+      let chars = '';
 
-      for (let j = 0; j < 4; j ++) {
+      for (let j = 0; j < 4; j++) {
         const end = currentAddress + j * 4 >= byteLength;
 
         for (let k = 0; k < 4; k++) {
@@ -80,7 +80,7 @@ export class Memory implements MemoryInterface {
         }
 
         chars += ' ';
-        line += ' '
+        line += ' ';
         line += end ? 'xxxxxxxxxx' : formatHex(this.readUint32(currentAddress + j * 4));
 
         currentAddress = currentAddress += 4;
@@ -97,13 +97,13 @@ export class Memory implements MemoryInterface {
     const byteLength = this.#buffer.byteLength;
     const rows = Math.ceil(length / 4);
 
-    let currentAddress = address
+    let currentAddress = address;
 
-    for(let i = 0; i < rows; i ++) {
+    for (let i = 0; i < rows; i++) {
       let line = `${formatHex(currentAddress)}:`;
-      let chars = ''
+      let chars = '';
 
-      for (let j = 0; j < 4; j ++) {
+      for (let j = 0; j < 4; j++) {
         const end = currentAddress + j * 4 >= byteLength;
 
         for (let k = 0; k < 4; k++) {
@@ -121,7 +121,7 @@ export class Memory implements MemoryInterface {
         }
 
         chars += ' ';
-        line += ' '
+        line += ' ';
         line += end ? 'xxxxxxxxxx' : formatHex(this.readUint32(currentAddress + j * 4));
 
         currentAddress = currentAddress += 4;

@@ -1,1 +1,1 @@
-export * from './mov'
+export * from './mov';

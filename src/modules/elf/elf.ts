@@ -1,11 +1,25 @@
-import { EI_MAG0, EI_MAG1, EI_MAG2, EI_MAG3, ELFCLASS32, ELFDATA2LSB, EV_CURRENT, EI_NIDENT, ET_EXEC, EM_ARM, E_EHSIZE_32, E_PHENTSIZE_32, E_SHENTSIZE_32 } from "./constants"
-import { EIMagic, ELFHeader, ELFProgramHeader, ELFProgram } from "./types"
+import {
+  EI_MAG0,
+  EI_MAG1,
+  EI_MAG2,
+  EI_MAG3,
+  ELFCLASS32,
+  ELFDATA2LSB,
+  EV_CURRENT,
+  EI_NIDENT,
+  ET_EXEC,
+  EM_ARM,
+  E_EHSIZE_32,
+  E_PHENTSIZE_32,
+  E_SHENTSIZE_32,
+} from './constants';
+import { EIMagic, ELFHeader, ELFProgramHeader, ELFProgram } from './types';
 
 export class ELF {
-  static ELFMag: EIMagic = [EI_MAG0, EI_MAG1, EI_MAG2, EI_MAG3]
+  static ELFMag: EIMagic = [EI_MAG0, EI_MAG1, EI_MAG2, EI_MAG3];
 
-  #header: ELFHeader
-  #programHeaderTable: ELFProgramHeader[]
+  #header: ELFHeader;
+  #programHeaderTable: ELFProgramHeader[];
 
   constructor(program: ELFProgram) {
     this.#header = {
@@ -15,7 +29,7 @@ export class ELF {
         data: ELFDATA2LSB,
         version: EV_CURRENT,
         pad: 0,
-        ident: EI_NIDENT
+        ident: EI_NIDENT,
       },
       e_type: ET_EXEC,
       e_machine: EM_ARM,
@@ -29,15 +43,15 @@ export class ELF {
       e_phnum: 0,
       e_shentsize: E_SHENTSIZE_32,
       e_shnum: 0,
-      e_shstrndx: 0
-    }
+      e_shstrndx: 0,
+    };
 
-    this.#programHeaderTable = []
+    this.#programHeaderTable = [];
   }
 
   write(): ArrayBuffer {
-    const buffer = new ArrayBuffer(0)
+    const buffer = new ArrayBuffer(0);
 
-    return buffer
+    return buffer;
   }
 }

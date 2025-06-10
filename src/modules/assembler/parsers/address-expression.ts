@@ -1,10 +1,4 @@
-import { map, sequence, char } from "../../parser-combinators";
-import { expression } from "./expressions";
+import { map, sequence, char } from '../../parser-combinators';
+import { expression } from './expressions';
 
-export const addressExpression = map(
-  sequence(
-    char('='),
-    expression
-  ),
-  value => value[1]
-)
+export const addressExpression = map(sequence(char('='), expression), (value) => value[1]);

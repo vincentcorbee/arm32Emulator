@@ -1,1 +1,1 @@
-export * from './assemble'
+export * from './assemble';

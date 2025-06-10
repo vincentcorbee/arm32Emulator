@@ -1,5 +1,29 @@
-import { CPSR, PC, R0, R1, R10, R11, R12, R13, R13_SVC, R13_UND, R14, R14_SVC, R14_UND, R2, R3, R4, R5, R6, R7, R8, R9, SPSR_SVC, SPSR_UND } from "../../constants/codes/registers";
-import { RegistersMap } from "./types";
+import {
+  CPSR,
+  PC,
+  R0,
+  R1,
+  R10,
+  R11,
+  R12,
+  R13,
+  R13_SVC,
+  R13_UND,
+  R14,
+  R14_SVC,
+  R14_UND,
+  R2,
+  R3,
+  R4,
+  R5,
+  R6,
+  R7,
+  R8,
+  R9,
+  SPSR_SVC,
+  SPSR_UND,
+} from '../../constants/codes/registers';
+import { RegistersMap } from './types';
 
 export const REGISTERS: RegistersMap = new Map([
   [R0, R0],
@@ -24,5 +48,5 @@ export const REGISTERS: RegistersMap = new Map([
   [R14_SVC, R14_SVC << 2],
   [R14_UND, R14_UND << 2],
   [SPSR_SVC, SPSR_SVC << 2],
-  [SPSR_UND, SPSR_UND << 2]
-])
+  [SPSR_UND, SPSR_UND << 2],
+]);

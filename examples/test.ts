@@ -3,13 +3,13 @@
 // import { Memory } from "./modules/memory";
 // import { MemoryController } from "./modules/memory-controller";
 
-import { assemble } from "../src/modules/assembler";
-import { log } from "../src/modules/assembler/helpers";
-import { program } from "../src/modules/assembler/parsers";
-import { mov } from "../src/modules/assembler/parsers/instructions/mov";
-import { stm } from "../src/modules/assembler/parsers/instructions/stm";
-import { Memory } from "../src/modules/memory";
-import { stm as stm_instruction } from "../src/instructions";
+import { assemble } from '../src/modules/assembler';
+import { log } from '../src/modules/assembler/helpers';
+import { program } from '../src/modules/assembler/parsers';
+import { mov } from '../src/modules/assembler/parsers/instructions/mov';
+import { stm } from '../src/modules/assembler/parsers/instructions/stm';
+import { Memory } from '../src/modules/memory';
+import { stm as stm_instruction } from '../src/instructions';
 
 // const source = `
 // .global _start
@@ -43,7 +43,6 @@ import { stm as stm_instruction } from "../src/instructions";
 
 // const memory = new Memory(1024);
 // const cpu = new CPU(memoryController);
-
 
 // // const program = (memory: Memory, cpu: CPU) => {
 // //   const data = 'Hello, World!\n'
@@ -137,16 +136,14 @@ import { stm as stm_instruction } from "../src/instructions";
 const memory = new Memory(1024);
 // const result = program.parse('mov r0, r1, LSL #(1 + 1)\n')
 
+// assemble('mov r0, r1, LSL #(1 + 1)\n', memory)
 
-  // assemble('mov r0, r1, LSL #(1 + 1)\n', memory)
-
-const result = stm.parse('STMFD R0, {R0, r4-R7}')
+const result = stm.parse('STMFD R0, {R0, r4-R7}');
 
 if (result.success) {
-  const { cond, rn, registerList, p, u, w } = result.value
+  const { cond, rn, registerList, p, u, w } = result.value;
 
-  const instruction = stm_instruction({ cond, rn, registerList, p, u, w })
+  const instruction = stm_instruction({ cond, rn, registerList, p, u, w });
 
-  console.log(instruction.toString(2).padStart(32, '0'))
+  console.log(instruction.toString(2).padStart(32, '0'));
 }
-

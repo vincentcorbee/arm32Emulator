@@ -1,60 +1,75 @@
 function evalBinaryExpression(node: any, symbolTable: any, locationCounter: number): any {
-  const { left, operator, right } = node
-  const leftValue = evalExpression(left, symbolTable, locationCounter)
-  const rightValue = evalExpression(right, symbolTable, locationCounter)
+  const { left, operator, right } = node;
+  const leftValue = evalExpression(left, symbolTable, locationCounter);
+  const rightValue = evalExpression(right, symbolTable, locationCounter);
 
   switch (operator) {
-    case '+': return leftValue + rightValue
-    case '-': return leftValue - rightValue
-    case '*': return leftValue * rightValue
-    case '/': return leftValue / rightValue
-    case '%': return leftValue % rightValue
-    case '&': return leftValue & rightValue
-    case '|': return leftValue | rightValue
-    case '^': return leftValue ^ rightValue
-    case '<<': return leftValue << rightValue
-    case '>>': return leftValue >> rightValue
+    case '+':
+      return leftValue + rightValue;
+    case '-':
+      return leftValue - rightValue;
+    case '*':
+      return leftValue * rightValue;
+    case '/':
+      return leftValue / rightValue;
+    case '%':
+      return leftValue % rightValue;
+    case '&':
+      return leftValue & rightValue;
+    case '|':
+      return leftValue | rightValue;
+    case '^':
+      return leftValue ^ rightValue;
+    case '<<':
+      return leftValue << rightValue;
+    case '>>':
+      return leftValue >> rightValue;
   }
 }
 
 function evalUnaryExpression(node: any, symbolTable: any, locationCounter: number): any {
-  const { operator, value } = node
-  const argumentValue = evalExpression(value, symbolTable, locationCounter)
+  const { operator, value } = node;
+  const argumentValue = evalExpression(value, symbolTable, locationCounter);
 
   switch (operator) {
-    case '+': return +argumentValue
-    case '-': return -argumentValue
-    case '~': return ~argumentValue
+    case '+':
+      return +argumentValue;
+    case '-':
+      return -argumentValue;
+    case '~':
+      return ~argumentValue;
   }
 }
 
 export function evalExpression(node: any, symbolTable: any, locationCounter: number): any {
-  const { type } = node
+  const { type } = node;
 
   switch (type) {
     case 'BinaryExpression': {
-      return evalBinaryExpression(node, symbolTable, locationCounter)
+      return evalBinaryExpression(node, symbolTable, locationCounter);
     }
     case 'UnaryExpression': {
-      return evalUnaryExpression(node, symbolTable, locationCounter)
+      return evalUnaryExpression(node, symbolTable, locationCounter);
     }
     case 'LabelExpression': {
-      const { value: { name } } = node
+      const {
+        value: { name },
+      } = node;
 
-      if (name === '.') return locationCounter
+      if (name === '.') return locationCounter;
 
-      if (!symbolTable.has(name)) throw Error(`Unknown symbol ${name}`)
+      if (!symbolTable.has(name)) throw Error(`Unknown symbol ${name}`);
 
-      return symbolTable.get(name).value
+      return symbolTable.get(name).value;
     }
     case 'CharacterConstant':
     case 'Number': {
-      return node.value
+      return node.value;
     }
     case 'ImmidiateExpression': {
-      return evalExpression(node.value, symbolTable, locationCounter)
+      return evalExpression(node.value, symbolTable, locationCounter);
     }
     default:
-      throw Error(`Unknown expression: ${type}`)
+      throw Error(`Unknown expression: ${type}`);
   }
 }

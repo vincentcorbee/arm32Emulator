@@ -1,16 +1,67 @@
-
-import { Register as RegisterName } from "../../types/mnemonics/registers";
-import { Register as RegisterCode } from "../../types/codes/register";
-import { R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, FP, IP, SP, LR, PC,
-  CPSR, R13_SVC, R14_SVC, SPSR_SVC, R11, R12, R13, R14, R15, SPSR,
-  SPSR_UND, R14_UND, R13_UND } from "../codes/registers";
-import { R0 as R0_NAME, R1 as R1_NAME, R2 as R2_NAME, R3 as R3_NAME,
-  R4 as R4_NAME, R5 as R5_NAME, R6 as R6_NAME, R7 as R7_NAME, R8 as R8_NAME,
-  R9 as R9_NAME, R10 as R10_NAME, R11 as R11_NAME, R12 as R12_NAME, R13 as R13_NAME,
-  R14 as R14_NAME, R15 as R15_NAME, FP as FP_NAME, IP as IP_NAME, SP as SP_NAME,
-  LR as LR_NAME, PC as PC_NAME, CPSR as CPSR_NAME, R13_SVC as R13_SVC_NAME,
-  R13_UND as R13_UND_NAME, R14_SVC as R14_SVC_NAME, R14_UND as R14_UND_NAME,
-  SPSR_SVC as SPSR_SVC_NAME, SPSR_UND as SPSR_UND_NAME, SPSR as SPSR_NAME  } from '../mnemonics/registers';
+import { Register as RegisterName } from '../../types/mnemonics/registers';
+import { Register as RegisterCode } from '../../types/codes/register';
+import {
+  R0,
+  R1,
+  R2,
+  R3,
+  R4,
+  R5,
+  R6,
+  R7,
+  R8,
+  R9,
+  R10,
+  FP,
+  IP,
+  SP,
+  LR,
+  PC,
+  CPSR,
+  R13_SVC,
+  R14_SVC,
+  SPSR_SVC,
+  R11,
+  R12,
+  R13,
+  R14,
+  R15,
+  SPSR,
+  SPSR_UND,
+  R14_UND,
+  R13_UND,
+} from '../codes/registers';
+import {
+  R0 as R0_NAME,
+  R1 as R1_NAME,
+  R2 as R2_NAME,
+  R3 as R3_NAME,
+  R4 as R4_NAME,
+  R5 as R5_NAME,
+  R6 as R6_NAME,
+  R7 as R7_NAME,
+  R8 as R8_NAME,
+  R9 as R9_NAME,
+  R10 as R10_NAME,
+  R11 as R11_NAME,
+  R12 as R12_NAME,
+  R13 as R13_NAME,
+  R14 as R14_NAME,
+  R15 as R15_NAME,
+  FP as FP_NAME,
+  IP as IP_NAME,
+  SP as SP_NAME,
+  LR as LR_NAME,
+  PC as PC_NAME,
+  CPSR as CPSR_NAME,
+  R13_SVC as R13_SVC_NAME,
+  R13_UND as R13_UND_NAME,
+  R14_SVC as R14_SVC_NAME,
+  R14_UND as R14_UND_NAME,
+  SPSR_SVC as SPSR_SVC_NAME,
+  SPSR_UND as SPSR_UND_NAME,
+  SPSR as SPSR_NAME,
+} from '../mnemonics/registers';
 
 export const RegisterCodesToNames: Record<RegisterCode, RegisterName> = {
   [R0]: R0_NAME,
@@ -37,7 +88,7 @@ export const RegisterCodesToNames: Record<RegisterCode, RegisterName> = {
   [SPSR_SVC]: SPSR_SVC_NAME,
   [SPSR_UND]: SPSR_UND_NAME,
   [SPSR]: SPSR_NAME,
-}
+};
 
 export const RegisterNameToCode: Record<RegisterName, RegisterCode> = {
   [R0_NAME]: R0,
@@ -68,5 +119,5 @@ export const RegisterNameToCode: Record<RegisterName, RegisterCode> = {
   [R14_UND_NAME]: R14_UND,
   [SPSR_SVC_NAME]: SPSR_SVC,
   [SPSR_UND_NAME]: SPSR_UND,
-  [SPSR_NAME]: SPSR
+  [SPSR_NAME]: SPSR,
 };

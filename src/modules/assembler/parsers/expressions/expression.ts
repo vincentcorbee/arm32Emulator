@@ -1,9 +1,4 @@
-import { map, sequence } from "../../../parser-combinators";
-import { parseAdditiveExpression } from "./additive-expression";
+import { map, sequence } from '../../../parser-combinators';
+import { parseAdditiveExpression } from './additive-expression';
 
-export const expression = map(
-  sequence(
-    parseAdditiveExpression
-  ),
-  value => value[0]
-)
+export const expression = map(sequence(parseAdditiveExpression), (value) => value[0]);

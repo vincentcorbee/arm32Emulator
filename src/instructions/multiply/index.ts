@@ -1,2 +1,2 @@
-export * from './mul'
-export * from './multiply'
+export * from './mul';
+export * from './multiply';

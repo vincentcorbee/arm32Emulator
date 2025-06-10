@@ -1,6 +1,34 @@
-
-import { OpCode } from "../../types/mnemonics/op-codes";
-import { AND, SUB, RSB, ADD, ADC, SBC, RSC, TST, TEQ, CMP, CMN, ORR, MOV, BIC, MVN, B, BL, SVC, LDR, LDRB, STRB, STR, STM, LDM, BX, PUSH, POP, MUL } from "../codes/op-codes";
+import { OpCode } from '../../types/mnemonics/op-codes';
+import {
+  AND,
+  SUB,
+  RSB,
+  ADD,
+  ADC,
+  SBC,
+  RSC,
+  TST,
+  TEQ,
+  CMP,
+  CMN,
+  ORR,
+  MOV,
+  BIC,
+  MVN,
+  B,
+  BL,
+  SVC,
+  LDR,
+  LDRB,
+  STRB,
+  STR,
+  STM,
+  LDM,
+  BX,
+  PUSH,
+  POP,
+  MUL,
+} from '../codes/op-codes';
 import {
   AND as AND_NAME,
   B as B_NAME,
@@ -19,25 +47,25 @@ import {
   LDM as LDM_NAME,
   PUSH as PUSH_NAME,
   POP as POP_NAME,
-  MUL as MUL_NAME
-} from "../mnemonics/op-codes";
+  MUL as MUL_NAME,
+} from '../mnemonics/op-codes';
 
 export const OpCodeNameToCode: Record<OpCode, number> = {
   [AND_NAME]: AND,
   [SUB_NAME]: SUB,
-  'RSB': RSB,
+  RSB: RSB,
   [ADD_NAME]: ADD,
-  'ADC': ADC,
-  'SBC': SBC,
-  'RSC': RSC,
-  'TST': TST,
-  'TEQ': TEQ,
+  ADC: ADC,
+  SBC: SBC,
+  RSC: RSC,
+  TST: TST,
+  TEQ: TEQ,
   [CMP_NAME]: CMP,
-  'CMN': CMN,
-  'ORR': ORR,
+  CMN: CMN,
+  ORR: ORR,
   [MOV_NAME]: MOV,
-  'BIC': BIC,
-  'MVN': MVN,
+  BIC: BIC,
+  MVN: MVN,
   [B_NAME]: B,
   [BL_NAME]: BL,
   [BX_NAME]: BX,
@@ -50,5 +78,5 @@ export const OpCodeNameToCode: Record<OpCode, number> = {
   [LDM_NAME]: LDM,
   [PUSH_NAME]: PUSH,
   [POP_NAME]: POP,
-  [MUL_NAME]: MUL
-}
+  [MUL_NAME]: MUL,
+};

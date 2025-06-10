@@ -1,11 +1,13 @@
-import { ShiftType } from "./codes/shift-type"
+import { ShiftType } from './codes/shift-type';
 
 export type RegisterShift = {
-  type: ShiftType, register: number
-}
+  type: ShiftType;
+  register: number;
+};
 
 export type ImmediateShift = {
-  type: ShiftType, amount: number
-}
+  type: ShiftType;
+  amount: number;
+};
 
-export type Shift = RegisterShift & ImmediateShift
+export type Shift = RegisterShift & ImmediateShift;

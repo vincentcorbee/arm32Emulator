@@ -20,14 +20,14 @@
   11011   Undefined     PC, R14_und..R13_und, R12..R0   CPSR, SPSR_und
 */
 
-export const M = 0x1f
+export const M = 0x1f;
 
-export const USER = 0x10
-export const IQ = 0x11
-export const IRQ = 0x12
-export const SUPERVISOR = 0x13
-export const ABORT = 0x17
-export const UND = 0x1b
+export const USER = 0x10;
+export const IQ = 0x11;
+export const IRQ = 0x12;
+export const SUPERVISOR = 0x13;
+export const ABORT = 0x17;
+export const UND = 0x1b;
 
-export const REGISTER_OFFSET = 0x0
-export const IMMIDATE_OFFSET = 0x1
+export const REGISTER_OFFSET = 0x0;
+export const IMMIDATE_OFFSET = 0x1;

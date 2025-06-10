@@ -1,2 +1,2 @@
-export * from './logical'
-export * from './arithmetic'
+export * from './logical';
+export * from './arithmetic';

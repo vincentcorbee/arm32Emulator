@@ -1,12 +1,12 @@
-import { STR, STRB } from "../../../../constants/mnemonics"
-import { map, sequence, whitespace, optional } from "../../../parser-combinators"
-import { optionalWhitespace } from "../optional-whitespace"
-import { register } from "../register"
-import { condition } from "../condition"
-import { opCode } from "../op-code"
-import { offsetAddressing } from "../offset-addressing"
-import { B, comma, T } from "../tokens"
-import { OpCodeNameToCode } from "../../../../constants/maps"
+import { STR, STRB } from '../../../../constants/mnemonics';
+import { map, sequence, whitespace, optional } from '../../../parser-combinators';
+import { optionalWhitespace } from '../optional-whitespace';
+import { register } from '../register';
+import { condition } from '../condition';
+import { opCode } from '../op-code';
+import { offsetAddressing } from '../offset-addressing';
+import { B, comma, T } from '../tokens';
+import { OpCodeNameToCode } from '../../../../constants/maps';
 
 /* STR{cond}{B}{T} Rd,<Address> */
 export const str = map(
@@ -19,15 +19,15 @@ export const str = map(
     register,
     comma,
     optionalWhitespace,
-    offsetAddressing
+    offsetAddressing,
   ),
-  value => {
-    const cond = value[1]
-    const rd = value[5].value
-    const type = value[2]
-    const mnemonic = type === 'B' ? STRB : STR
-    const opCode = OpCodeNameToCode[mnemonic]
-    const { rn, writeBack, offsetMode: i, prePost, offset } = value[8]
+  (value) => {
+    const cond = value[1];
+    const rd = value[5].value;
+    const type = value[2];
+    const mnemonic = type === 'B' ? STRB : STR;
+    const opCode = OpCodeNameToCode[mnemonic];
+    const { rn, writeBack, offsetMode: i, prePost, offset } = value[8];
 
     return {
       type: 'Instruction',
@@ -39,7 +39,7 @@ export const str = map(
       rn,
       offset,
       writeBack,
-      prePost
-    }
-  }
-)
+      prePost,
+    };
+  },
+);

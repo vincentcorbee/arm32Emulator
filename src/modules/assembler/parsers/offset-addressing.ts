@@ -1,10 +1,10 @@
-import { IMMIDATE_OFFSET, REGISTER_OFFSET } from "../../../constants/codes"
-import { map, sequence, optional, either } from "../../parser-combinators"
-import { immidiateExpression } from "./expressions/immidiate-expression"
-import { optionalWhitespace } from "./optional-whitespace"
-import { register } from "./register"
-import { shift } from "./shift"
-import { comma, leftSquareBracket, LSL, exclamationMark, rightSquareBracket } from "./tokens"
+import { IMMIDATE_OFFSET, REGISTER_OFFSET } from '../../../constants/codes';
+import { map, sequence, optional, either } from '../../parser-combinators';
+import { immidiateExpression } from './expressions/immidiate-expression';
+import { optionalWhitespace } from './optional-whitespace';
+import { register } from './register';
+import { shift } from './shift';
+import { comma, leftSquareBracket, LSL, exclamationMark, rightSquareBracket } from './tokens';
 
 const registerOffsetPreIndexed = map(
   sequence(
@@ -12,41 +12,24 @@ const registerOffsetPreIndexed = map(
     optionalWhitespace,
     register,
     optionalWhitespace,
-    optional(
-      map(
-        sequence(
-          comma,
-          optionalWhitespace,
-          register,
-        ),
-        value => value[2]
-      ),
-    ),
+    optional(map(sequence(comma, optionalWhitespace, register), (value) => value[2])),
     optionalWhitespace,
     optional(
-      map(
-        sequence(
-          comma,
-          optionalWhitespace,
-          LSL,
-          optionalWhitespace,
-          immidiateExpression
-        ), value => ({
-          type: 'LSL',
-          value: value[4].value
-        })
-      )
+      map(sequence(comma, optionalWhitespace, LSL, optionalWhitespace, immidiateExpression), (value) => ({
+        type: 'LSL',
+        value: value[4].value,
+      })),
     ),
     optionalWhitespace,
     rightSquareBracket,
     optionalWhitespace,
-    optional(exclamationMark)
+    optional(exclamationMark),
   ),
-  value => {
-    const rn = value[2].value
-    const offset = value[4] ?? undefined
-    const shift = value[6] ?? undefined
-    const writeBack = value[7]
+  (value) => {
+    const rn = value[2].value;
+    const offset = value[4] ?? undefined;
+    const shift = value[6] ?? undefined;
+    const writeBack = value[7];
 
     return {
       type: 'OffsetAddressing',
@@ -56,8 +39,9 @@ const registerOffsetPreIndexed = map(
       shift,
       writeBack: writeBack !== null ? 1 : 0,
       prePost: 1,
-    }
-})
+    };
+  },
+);
 
 const registerOffsetPostIndexed = map(
   sequence(
@@ -71,9 +55,9 @@ const registerOffsetPostIndexed = map(
     optionalWhitespace,
     register,
     optionalWhitespace,
-    shift
+    shift,
   ),
-  value => {
+  (value) => {
     return {
       type: 'OffsetAddressing',
       offsetMode: REGISTER_OFFSET,
@@ -84,8 +68,9 @@ const registerOffsetPostIndexed = map(
       },
       writeBack: 1,
       prePost: 0,
-    }
-})
+    };
+  },
+);
 
 const immidiateOffsetPreIndexed = map(
   sequence(
@@ -94,25 +79,20 @@ const immidiateOffsetPreIndexed = map(
     register,
     optionalWhitespace,
     optional(
-      map(sequence(
-        comma,
-        optionalWhitespace,
-        immidiateExpression,
-        optionalWhitespace,
-      ), value => value[2]),
+      map(sequence(comma, optionalWhitespace, immidiateExpression, optionalWhitespace), (value) => value[2]),
       () => ({
         value: { value: 0, type: 'Number' },
-        type: 'ImmidiateExpression'
-      })
+        type: 'ImmidiateExpression',
+      }),
     ),
     rightSquareBracket,
     optionalWhitespace,
-    optional(exclamationMark)
+    optional(exclamationMark),
   ),
-  value => {
-    const rn = value[2].value
-    const offset = value[4] || undefined
-    const writeBack = value[7]
+  (value) => {
+    const rn = value[2].value;
+    const offset = value[4] || undefined;
+    const writeBack = value[7];
 
     return {
       type: 'OffsetAddressing',
@@ -121,8 +101,9 @@ const immidiateOffsetPreIndexed = map(
       offset,
       writeBack: writeBack !== null ? 1 : 0,
       prePost: 1,
-    }
-})
+    };
+  },
+);
 
 const immidiateOffsetPostIndexed = map(
   sequence(
@@ -136,7 +117,7 @@ const immidiateOffsetPostIndexed = map(
     optionalWhitespace,
     immidiateExpression,
   ),
-  value => {
+  (value) => {
     return {
       type: 'OffsetAddressing',
       offsetMode: IMMIDATE_OFFSET,
@@ -144,12 +125,13 @@ const immidiateOffsetPostIndexed = map(
       offset: value[8],
       writeBack: 1,
       prePost: 0,
-    }
-})
+    };
+  },
+);
 
 export const offsetAddressing = either(
   immidiateOffsetPostIndexed,
   registerOffsetPostIndexed,
   immidiateOffsetPreIndexed,
   registerOffsetPreIndexed,
-)
+);

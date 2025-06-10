@@ -1,2 +1,2 @@
-export * from './str'
-export * from './strb'
+export * from './str';
+export * from './strb';

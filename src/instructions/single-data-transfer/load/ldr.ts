@@ -1,5 +1,5 @@
-import { singleDataTransfer, SingleDataTransferArgs } from "../single-data-transfer";
+import { singleDataTransfer, SingleDataTransferArgs } from '../single-data-transfer';
 
-export type LdrArgs = Omit<SingleDataTransferArgs, 'l'>
+export type LdrArgs = Omit<SingleDataTransferArgs, 'l'>;
 
-export const ldr = (args: LdrArgs) => singleDataTransfer({ ...args, l: 1 })
+export const ldr = (args: LdrArgs) => singleDataTransfer({ ...args, l: 1 });

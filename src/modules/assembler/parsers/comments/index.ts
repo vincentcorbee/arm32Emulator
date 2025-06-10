@@ -1,2 +1,2 @@
-export * from'./comment'
-export * from './multiline-comment'
+export * from './comment';
+export * from './multiline-comment';

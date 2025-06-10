@@ -1,1 +1,1 @@
-export * from './memory-controller'
+export * from './memory-controller';
