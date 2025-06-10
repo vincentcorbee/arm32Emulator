@@ -260,9 +260,19 @@ export class CPU implements CPUInterface {
     const right = this.#getSecondOperandValue(instruction);
     const result = left - right;
 
-    this.#setCarryFlag(result > 0);
-    this.#setNegativeFlag(result < 0);
-    this.#setZeroFlag(result === 0);
+    const signLeft = left >>> 31 & 0x1;
+    const signRight = right >>> 31 & 0x1;
+    const signResult = result >>> 31 & 0x1;
+
+    const overflow = signLeft !== signRight && signLeft !== signResult;
+    const carry = (left >>> 0) >= (right >>> 0);
+    const negative = signResult === 1;
+    const zero = result === 0;
+
+    this.#setCarryFlag(carry);
+    this.#setOverflowFlag(overflow);
+    this.#setNegativeFlag(negative);
+    this.#setZeroFlag(zero);
   }
 
   /**
@@ -281,7 +291,7 @@ export class CPU implements CPUInterface {
     this.#setRegister(rd, value);
 
     if (s) {
-      this.#setNegativeFlag(value < 0);
+      this.#setNegativeFlag((value >>> 31 & 0x1) === 1);
       this.#setZeroFlag(value === 0);
     }
   }
@@ -302,7 +312,7 @@ export class CPU implements CPUInterface {
     this.#setRegister(rd, value);
 
     if (s) {
-      this.#setNegativeFlag(value < 0);
+      this.#setNegativeFlag((value >>> 31 & 0x1) === 1);
       this.#setZeroFlag(value === 0);
     }
   }
@@ -326,9 +336,19 @@ export class CPU implements CPUInterface {
     this.#setRegister(rd, result);
 
     if (s) {
-      this.#setCarryFlag(result > 0);
-      this.#setNegativeFlag(result < 0);
-      this.#setZeroFlag(result === 0);
+      const signLeft = left >>> 31 & 0x1;
+      const signRight = right >>> 31 & 0x1;
+      const signResult = result >>> 31 & 0x1;
+
+      const overflow = signLeft === signRight && signLeft !== signResult;
+      const carry = result > (result >>> 0);
+      const negative = signResult === 1;
+      const zero = result === 0;
+
+      this.#setCarryFlag(carry);
+      this.#setOverflowFlag(overflow);
+      this.#setNegativeFlag(negative);
+      this.#setZeroFlag(zero);
     }
   }
 
@@ -351,10 +371,19 @@ export class CPU implements CPUInterface {
     this.#setRegister(rd, result);
 
     if (s) {
-      this.#setCarryFlag(left >= right);
-      this.#setOverflowFlag(left < 0 && right < 0 && result > 0);
-      this.#setNegativeFlag(result < 0);
-      this.#setZeroFlag(result === 0);
+      const signLeft = left >>> 31 & 0x1;
+      const signRight = right >>> 31 & 0x1;
+      const signResult = result >>> 31 & 0x1;
+
+      const overflow = signLeft !== signRight && signLeft !== signResult;
+      const carry = (left >>> 0) >= (right >>> 0);
+      const negative = signResult === 1;
+      const zero = result === 0;
+
+      this.#setCarryFlag(carry);
+      this.#setOverflowFlag(overflow);
+      this.#setNegativeFlag(negative);
+      this.#setZeroFlag(zero);
     }
   }
 
@@ -382,7 +411,7 @@ export class CPU implements CPUInterface {
     this.#setRegister(rd, result);
 
     if (s) {
-      this.#setNegativeFlag(result < 0);
+      this.#setNegativeFlag((result >>> 31 & 0x1) === 1);
       this.#setZeroFlag(result === 0);
     }
   }
