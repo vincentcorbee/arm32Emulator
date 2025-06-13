@@ -1,23 +1,3 @@
-/*
-  3.3 Registers
-  The processor has a total of 37 registers made up of 31 general 32 bit registers and 6 status registers. At any
-  one time 16 general registers (R0 to R15) and one or two status registers are visible to the programmer. The
-  visible registers depend on the processor mode. The other registers, known as the banked registers, are
-  switched in to support IRQ, FIQ, Supervisor, Abort and Undefined mode processing. Figure 6: Register
-  Organisation shows how the registers are arranged, with the banked registers shaded.
-
-  In all modes 16 registers, R0 to R15, are directly accessible. All registers except R15 are general purpose and
-  may be used to hold data or address values. Register R15 holds the Program Counter (PC). When R15 is
-  read, bits [1:0] are zero and bits [31:2] contain the PC. A seventeenth register (the CPSR - Current Program
-  Status Register) is also accessible. It contains condition code flags and the current mode bits and may be
-  thought of as an extension to the PC.
-
-  R14 is used as the subroutine link register and receives a copy of R15 when a Branch and Link instruction
-  is executed. It may be treated as a general purpose register at all other times. R14_svc, R14_irq, R14_fiq,
-  R14_abt and R14_und are used similarly to hold the return values of R15 when interrupts and exceptions
-  arise, or when Branch and Link instructions are executed within interrupt or exception routines.
-*/
-
 /* General purpose */
 export const R0 = 0x00;
 export const R1 = 0x01;

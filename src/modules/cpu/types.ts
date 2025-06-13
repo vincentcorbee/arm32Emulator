@@ -14,10 +14,6 @@ export type Handlers = Handler | ((instruction: number) => Handler);
 
 export type InstructionHandlers = Record<number, Handlers>;
 
-export type BlockDataTransferHandlers = Record<number, Handlers>;
-
-export type SingleDataTransferHandlers = Record<number, Handlers>;
-
 export type DataProcessingHandlers = Record<number, Handlers>;
 
 export type ConditionHandler = () => boolean;
