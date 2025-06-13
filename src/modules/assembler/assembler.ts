@@ -206,8 +206,6 @@ export class Assembler {
           `Warning: cannot find entry symbol ${e}, defaulting to 0x${startAddress.toString(16).padStart(8, '0')}`,
         );
 
-      // memory.view()
-
       return symbolTable.get(e)?.value || 0;
     }
   }

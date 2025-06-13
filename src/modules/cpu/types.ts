@@ -24,9 +24,13 @@ export type ConditionHandler = () => boolean;
 
 export type ConditionHandlers = Record<number, ConditionHandler>;
 
-export type ShiftHandler = (value: number, shift: number) => number;
+export type ShiftHandler = (value: number, shift: number) => ShiftResult;
 
 export type ShiftHandlers = Record<number, ShiftHandler>;
+
+export type ShiftResult = { carry: number; value: number };
+
+export type SecondOperandValue = { carry: number; value: number };
 
 export type Pipeline = { fetch: number | null; decode: number | null; execute: (() => void) | null };
 

@@ -9,7 +9,9 @@ import {
   InstructionHandlers,
   Pipeline,
   RegistersMap,
+  SecondOperandValue,
   ShiftHandlers,
+  ShiftResult,
   SingleDataTransferHandlers,
 } from './types';
 import { REGISTERS } from './constants';
@@ -45,7 +47,7 @@ import { N as N_FLAG, C as C_FLAG, Z as Z_FLAG, V as V_FLAG } from '../../consta
 import { AL, EQ, GE, GT, LE, LT, NE } from '../../constants/codes/condition';
 import { M, SUPERVISOR, UND, USER } from '../../constants/codes/modes';
 import { ADD, CMP, MOV, MVN, SUB } from '../../constants/codes/op-codes';
-import { ASR, LSL, LSR, ROR } from '../../constants/codes/shift-types';
+import { ASR, LSL, LSR, ROR, RRX } from '../../constants/codes/shift-types';
 import { SHIFT_SOURCE_REGISTER } from '../../constants/codes/shift-source-types';
 import { EXIT_SYS_CALL, WRITE_SYS_CALL } from '../../constants/codes/sys-calls';
 import { Register } from '../../types/codes/register';
@@ -119,6 +121,7 @@ export class CPU implements CPUInterface {
       [LSR]: this.#lsr,
       [ASR]: this.#asr,
       [ROR]: this.#ror,
+      [RRX]: this.#rrx,
     };
 
     /* Start in user mode */
@@ -291,7 +294,7 @@ export class CPU implements CPUInterface {
 
     const rn = (instruction >> 16) & 0xf;
     const left = this.#getRegister(rn);
-    const right = this.#getSecondOperandValue(instruction);
+    const { value: right } = this.#getSecondOperandValue(instruction);
     const result = left - right;
 
     const signLeft = (left >>> 31) & 0x1;
@@ -320,11 +323,12 @@ export class CPU implements CPUInterface {
 
     const rd = (instruction >> 12) & 0xf;
     const s = (instruction >> 20) & 0x1;
-    const value = this.#getSecondOperandValue(instruction);
+    const { carry, value } = this.#getSecondOperandValue(instruction);
 
     this.#setRegister(rd, value);
 
     if (s) {
+      this.#setCarryFlag(carry === 1);
       this.#setNegativeFlag(((value >>> 31) & 0x1) === 1);
       this.#setZeroFlag(value === 0);
     }
@@ -341,13 +345,15 @@ export class CPU implements CPUInterface {
 
     const rd = (instruction >> 12) & 0xf;
     const s = (instruction >> 20) & 0x1;
-    const value = ~this.#getSecondOperandValue(instruction);
+    const { carry, value } = this.#getSecondOperandValue(instruction);
+    const negatedValue = ~value;
 
-    this.#setRegister(rd, value);
+    this.#setRegister(rd, negatedValue);
 
     if (s) {
-      this.#setNegativeFlag(((value >>> 31) & 0x1) === 1);
-      this.#setZeroFlag(value === 0);
+      this.#setCarryFlag(carry === 1);
+      this.#setNegativeFlag(((negatedValue >>> 31) & 0x1) === 1);
+      this.#setZeroFlag(negatedValue === 0);
     }
   };
 
@@ -364,7 +370,7 @@ export class CPU implements CPUInterface {
     const rn = (instruction >> 16) & 0xf;
     const rd = (instruction >> 12) & 0xf;
     const left = this.#getRegister(rn);
-    const right = this.#getSecondOperandValue(instruction);
+    const { value: right } = this.#getSecondOperandValue(instruction);
     const result = left + right;
 
     this.#setRegister(rd, result);
@@ -375,7 +381,7 @@ export class CPU implements CPUInterface {
       const signResult = (result >>> 31) & 0x1;
 
       const overflow = signLeft === signRight && signLeft !== signResult;
-      const carry = result > result >>> 0;
+      const carry = (left >>> 0) + (right >>> 0) > 0xffffffff;
       const negative = signResult === 1;
       const zero = result === 0;
 
@@ -399,7 +405,7 @@ export class CPU implements CPUInterface {
     const rn = (instruction >> 16) & 0xf;
     const rd = (instruction >> 12) & 0xf;
     const left = this.#getRegister(rn);
-    const right = this.#getSecondOperandValue(instruction);
+    const { value: right } = this.#getSecondOperandValue(instruction);
     const result = left - right;
 
     this.#setRegister(rd, result);
@@ -710,14 +716,15 @@ export class CPU implements CPUInterface {
     this.#setRegister(CPSR, this.#getRegister(SPSR_UND));
   };
 
-  #getSecondOperandValue(instruction: Instruction): number {
+  #getSecondOperandValue(instruction: Instruction): SecondOperandValue {
     const immediate = (instruction >> 25) & 0x1;
 
     if (immediate) {
-      const imm = ((instruction & 0xff) << 24) >> 24;
+      const imm = instruction & 0xff;
       const rotate = ((instruction >> 8) & 0xf) << 1;
+      const { value, carry } = this.#ror(imm, rotate * 2);
 
-      return this.#ror(imm, rotate);
+      return { carry, value };
     }
 
     const registerValue = this.#getRegister(instruction & 0xff);
@@ -732,21 +739,78 @@ export class CPU implements CPUInterface {
       return this.#shift(registerValue, shiftAmount, shiftType);
     }
 
-    return registerValue;
+    const carry = this.#getCarryFlag();
+
+    return { carry, value: registerValue };
   }
 
-  #shift(value: number, shift: number, shiftType: number): number {
-    const handler = this.#shiftHandlers[shiftType];
+  #shift(value: number, shift: number, shiftType: number): ShiftResult {
+    const type = shiftType === ROR && shift !== 0 ? ROR : shiftType;
+    const handler = this.#shiftHandlers[type];
 
-    if (typeof handler !== 'function') return value;
+    if (typeof handler !== 'function') {
+      const carry = this.#getCarryFlag();
+
+      return { carry, value };
+    }
 
     return handler(value, shift);
   }
 
-  #ror = (value: number, shift: number): number => (value >>> shift) | ((value << (32 - shift)) >>> 0);
-  #lsl = (value: number, shift: number): number => value << shift;
-  #lsr = (value: number, shift: number): number => value >>> shift;
-  #asr = (value: number, shift: number): number => value >> shift;
+  #ror = (value: number, shift: number): ShiftResult => {
+    const result = (value >>> shift) | ((value << (32 - shift)) >>> 0);
+    const carry = (value >>> (shift - 1)) & 0x1;
+
+    return { carry, value: result };
+  };
+
+  #rrx = (value: number): ShiftResult => {
+    const currentCarry = this.#getCarryFlag();
+    const result = ((value >>> 1) | (currentCarry << 31)) >>> 0;
+    const carry = value & 0x1;
+
+    return { carry, value: result };
+  };
+
+  #lsl = (value: number, shift: number): ShiftResult => {
+    if (shift === 0) {
+      const carry = this.#getCarryFlag();
+
+      return { carry, value };
+    }
+
+    const result = (value << shift) >>> 0;
+    const carry = (value >>> (32 - shift)) & 0x1;
+
+    return { carry, value: result };
+  };
+
+  #lsr = (value: number, shift: number): ShiftResult => {
+    if (shift === 0) {
+      const carry = value >>> 31;
+
+      return { carry, value: 0 };
+    }
+
+    const result = value >>> shift;
+    const carry = (value >>> (shift - 1)) & 0x1;
+
+    return { carry, value: result };
+  };
+
+  #asr = (value: number, shift: number): ShiftResult => {
+    if (shift === 0) {
+      const carry = value >>> 31;
+      const result = carry ? 0xffffffff : 0;
+
+      return { carry, value: result };
+    }
+
+    const result = (value >> shift) >>> 0;
+    const carry = (value >>> (shift - 1)) & 0x1;
+
+    return { carry, value: result };
+  };
 
   #shouldExecute(instruction: Instruction): boolean {
     const condition = this.#getConditionCode(instruction);
@@ -760,9 +824,7 @@ export class CPU implements CPUInterface {
   #getConditionCode(instruction: Instruction): Condition {
     const code = (instruction >> 28) & 0xf;
 
-    if (code >= EQ && code <= AL) {
-      return code as Condition;
-    }
+    if (code >= EQ && code <= AL) return code as Condition;
 
     return AL;
   }

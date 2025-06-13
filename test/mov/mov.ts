@@ -1,4 +1,4 @@
-import { R0, R1, R2 } from '../../src/constants/codes';
+import { R0, R1, R2, R3 } from '../../src/constants/codes';
 import { mov } from '../../src/instructions';
 import { CPU, Memory, MemoryController } from '../../src/modules';
 
@@ -11,6 +11,7 @@ const instructions = [
   mov({ rd: R0, i: 1, operand2: { value: 2, type: 'ImmidiateExpression' } }),
   mov({ rd: R1, i: 1, operand2: { value: 4, type: 'ImmidiateExpression' } }),
   mov({ rd: R2, i: 0, operand2: { value: R0, type: 'Register' } }),
+  mov({ rd: R3, i: 1, s: 1, operand2: { value: -1, type: 'ImmidiateExpression' } }),
 ];
 
 instructions.forEach((instruction, i) => memory.writeUint32(i * 4, instruction));
@@ -21,13 +22,9 @@ cpu.setPC(0);
 
 cpu.viewRegisters();
 
-process.on('exit', () => {
-  console.log();
-  cpu.viewRegisters();
-  memory.viewAt(0x3fc);
-});
-
 input.setRawMode(true);
+
+let cycleCount = 0;
 
 input.on('data', (data) => {
   const token = data.toString();
@@ -39,6 +36,13 @@ input.on('data', (data) => {
     case '\r': {
       cpu.cycle();
       cpu.viewRegisters();
+      cycleCount++;
+
+      if (cycleCount >= instructions.length) {
+        console.log('All instructions executed.');
+        process.exit();
+      }
+
       break;
     }
   }
