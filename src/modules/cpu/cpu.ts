@@ -136,6 +136,12 @@ export class CPU implements CPUInterface {
     this.#setRegister(SP, value);
   }
 
+  getRegister(register: Register): number {
+    if (register >= R0 && register <= CPSR) return this.#getRegister(register);
+
+    throw Error(`Invalid register: ${RegisterCodesToNames[register]}`);
+  }
+
   viewRegisters(): void {
     this.#registers.keys().forEach((register) => {
       const name = RegisterCodesToNames[register as Register];
@@ -335,7 +341,7 @@ export class CPU implements CPUInterface {
   };
 
   /**
-    MOV{cond}{S} Rd, <Op2>
+    MVN{cond}{S} Rd, <Op2>
 
     4x   2x x 4x     x 4x 4x 12x
     Cond 00 I Opcode S Rn Rd Op2
