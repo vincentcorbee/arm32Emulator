@@ -1,9 +1,12 @@
+import { Register } from '../../types/codes/register';
+
 export interface CPUInterface {
   run(): void;
   cycle(): void;
   setPC(value: number): void;
   setSP(value: number): void;
   viewRegisters(): void;
+  getRegister(register: Register): number;
 }
 
 export type CPU = CPUInterface;
