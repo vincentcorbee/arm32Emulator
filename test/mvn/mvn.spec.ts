@@ -10,8 +10,8 @@ describe('MVN instruction', () => {
   const cpu = new CPU(memoryController);
 
   const instructions = [
-    mvn({ rd: R0, i: 1, operand2: { value: 2, type: 'ImmidiateExpression' } }),
-    mvn({ rd: R1, i: 1, s: 1, operand2: { value: 0, type: 'ImmidiateExpression' } }),
+    mvn({ rd: R0, i: 1, operand2: { value: 2, type: 'ImmediateExpression' } }),
+    mvn({ rd: R1, i: 1, s: 1, operand2: { value: 0, type: 'ImmediateExpression' } }),
   ];
 
   instructions.forEach((instruction, i) => memory.writeUint32(i * 4, instruction));

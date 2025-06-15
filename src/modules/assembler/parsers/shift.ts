@@ -1,7 +1,7 @@
 import { ShiftTypeNameToCode } from '../../../constants/maps';
 import { optional, map, sequence, or } from '../../parser-combinators';
 import { ShiftType } from '../../../types/mnemonics/shift-type';
-import { immidiateExpression } from './expressions/immidiate-expression';
+import { ImmediateExpression } from './expressions/immidiate-expression';
 import { optionalWhitespace } from './optional-whitespace';
 import { register } from './register';
 import { shiftType } from './shift-type';
@@ -10,12 +10,12 @@ import { SHIFT_SOURCE_IMMEDIATE, SHIFT_SOURCE_REGISTER } from '../../../constant
 
 export const shift = optional(
   map(
-    sequence(comma, optionalWhitespace, shiftType, optionalWhitespace, or(immidiateExpression, register)),
+    sequence(comma, optionalWhitespace, shiftType, optionalWhitespace, or(ImmediateExpression, register)),
     (value) => {
       const shiftSrc = value[4];
       const type = ShiftTypeNameToCode[value[2] as ShiftType];
 
-      if (shiftSrc.type === 'ImmidiateExpression') {
+      if (shiftSrc.type === 'ImmediateExpression') {
         return {
           source: SHIFT_SOURCE_IMMEDIATE,
           type,

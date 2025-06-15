@@ -9,7 +9,7 @@ export const mvn = map(sequence(opCode(MVN), whitespace, register, comma, whites
   const { value: opCode, mnemonic } = value[0];
   const rd = value[2].value;
   const operand2 = value[5];
-  const i = operand2.type === 'ImmidiateExpression' ? 1 : 0;
+  const i = operand2.type === 'ImmediateExpression' ? 1 : 0;
 
   return {
     type: 'Instruction',

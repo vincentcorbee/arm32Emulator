@@ -3,7 +3,7 @@ import { Instruction } from '../../modules/cpu/types';
 import { Shift } from '../../types/shift';
 
 export type ImmidiateOffset = {
-  type: 'ImmidiateExpression';
+  type: 'ImmediateExpression';
   value: number;
 };
 
@@ -45,7 +45,7 @@ export const singleDataTransfer = (args: SingleDataTransferArgs): Instruction =>
 
   const { type, value: offsetValue } = offset;
 
-  if (type === 'ImmidiateExpression') instruction = (instruction | (offsetValue & 0xfff)) >>> 0;
+  if (type === 'ImmediateExpression') instruction = (instruction | (offsetValue & 0xfff)) >>> 0;
   else {
     const { shift } = offset;
 

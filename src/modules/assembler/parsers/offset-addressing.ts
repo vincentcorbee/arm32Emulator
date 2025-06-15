@@ -1,6 +1,6 @@
 import { IMMIDATE_OFFSET, REGISTER_OFFSET } from '../../../constants/codes';
 import { map, sequence, optional, either } from '../../parser-combinators';
-import { immidiateExpression } from './expressions/immidiate-expression';
+import { ImmediateExpression } from './expressions/immidiate-expression';
 import { optionalWhitespace } from './optional-whitespace';
 import { register } from './register';
 import { shift } from './shift';
@@ -15,7 +15,7 @@ const registerOffsetPreIndexed = map(
     optional(map(sequence(comma, optionalWhitespace, register), (value) => value[2])),
     optionalWhitespace,
     optional(
-      map(sequence(comma, optionalWhitespace, LSL, optionalWhitespace, immidiateExpression), (value) => ({
+      map(sequence(comma, optionalWhitespace, LSL, optionalWhitespace, ImmediateExpression), (value) => ({
         type: 'LSL',
         value: value[4].value,
       })),
@@ -79,10 +79,10 @@ const immidiateOffsetPreIndexed = map(
     register,
     optionalWhitespace,
     optional(
-      map(sequence(comma, optionalWhitespace, immidiateExpression, optionalWhitespace), (value) => value[2]),
+      map(sequence(comma, optionalWhitespace, ImmediateExpression, optionalWhitespace), (value) => value[2]),
       () => ({
         value: { value: 0, type: 'Number' },
-        type: 'ImmidiateExpression',
+        type: 'ImmediateExpression',
       }),
     ),
     rightSquareBracket,
@@ -115,7 +115,7 @@ const immidiateOffsetPostIndexed = map(
     optionalWhitespace,
     comma,
     optionalWhitespace,
-    immidiateExpression,
+    ImmediateExpression,
   ),
   (value) => {
     return {

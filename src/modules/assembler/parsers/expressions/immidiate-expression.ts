@@ -3,7 +3,7 @@ import { expression } from './expression';
 import { createNode } from '../mappers';
 import { pound } from '../tokens';
 
-export const immidiateExpression = map(
+export const ImmediateExpression = map(
   chain(pound, () => expression),
-  createNode('ImmidiateExpression'),
+  createNode('ImmediateExpression'),
 );

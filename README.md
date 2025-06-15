@@ -84,15 +84,15 @@ MoveOpCode :
 
 Operand :
     Register
-  | ImmidiateExpression
+  | ImmediateExpression
 
-ImmidiateExpression :
-    ImmidiateExpressionStart ImmidiateExpressionPart
+ImmediateExpression :
+    ImmediateExpressionStart ImmediateExpressionPart
 
-ImmidiateExpressionStart :
+ImmediateExpressionStart :
     "#"
 
-ImmidiateExpressionPart :
+ImmediateExpressionPart :
     Expression
 
 Expression :

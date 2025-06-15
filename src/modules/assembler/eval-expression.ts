@@ -66,7 +66,7 @@ export function evalExpression(node: any, symbolTable: any, locationCounter: num
     case 'Number': {
       return node.value;
     }
-    case 'ImmidiateExpression': {
+    case 'ImmediateExpression': {
       return evalExpression(node.value, symbolTable, locationCounter);
     }
     default:

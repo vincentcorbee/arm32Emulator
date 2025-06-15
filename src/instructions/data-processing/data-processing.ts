@@ -4,7 +4,7 @@ import { Instruction } from '../../modules/cpu/types';
 import { Condition } from '../../types/codes/condition';
 import { Shift } from '../../types/shift';
 
-export type Operand2Type = 'Register' | 'ImmidiateExpression';
+export type Operand2Type = 'Register' | 'ImmediateExpression';
 
 export type Operand2 = {
   value: number;
@@ -37,7 +37,7 @@ export const dataProcessing = (args: DataProcessingArgs): Instruction => {
 
   const { value: operand2Value, type, shift, rotate = 0 } = operand2;
 
-  if (type === 'ImmidiateExpression') {
+  if (type === 'ImmediateExpression') {
     instruction = (instruction | (rotate << 8)) >>> 0;
     instruction = (instruction | (operand2Value & 0xff)) >>> 0;
   } else {

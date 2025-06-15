@@ -274,7 +274,7 @@ export const assemble = (source: string, memory: Memory, args?: AssemblerArgs) =
             case MOV: {
               const { rd, operand2, i } = rest;
 
-              if (operand2.type === 'ImmidiateExpression')
+              if (operand2.type === 'ImmediateExpression')
                 operand2.value = evalExpression(operand2, symbolTable, location);
 
               const { shift } = operand2;
@@ -289,7 +289,7 @@ export const assemble = (source: string, memory: Memory, args?: AssemblerArgs) =
             case ADD: {
               const { rd, rn, i, s, cond, operand2 } = rest;
 
-              if (operand2.type === 'ImmidiateExpression')
+              if (operand2.type === 'ImmediateExpression')
                 operand2.value = evalExpression(operand2, symbolTable, location);
 
               const { shift } = operand2;
@@ -340,7 +340,7 @@ export const assemble = (source: string, memory: Memory, args?: AssemblerArgs) =
               const { rd, rn, offset, writeBack, prePost, i } = rest;
               const b = opCode === STRB ? 1 : 0;
 
-              if (offset.type === 'ImmidiateExpression') {
+              if (offset.type === 'ImmediateExpression') {
                 offset.value = evalExpression(offset, symbolTable, location);
               } else {
                 const { shift } = offset;
@@ -366,14 +366,14 @@ export const assemble = (source: string, memory: Memory, args?: AssemblerArgs) =
                   rd,
                   rn,
                   i: 1,
-                  offset: { type: 'ImmidiateExpression', value: Math.abs(delta) },
+                  offset: { type: 'ImmediateExpression', value: Math.abs(delta) },
                   u: upDown,
                   b: byteWord,
                 });
               } else {
                 const { writeBack, prePost, i } = rest;
 
-                if (offset.type === 'ImmidiateExpression') {
+                if (offset.type === 'ImmediateExpression') {
                   offset.value = evalExpression(offset, symbolTable, location);
                 } else {
                   const { shift } = offset;

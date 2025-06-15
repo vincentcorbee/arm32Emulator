@@ -315,7 +315,7 @@ export class Assembler {
     const { rd, rn, i, s, cond, operand2, opCode, location } = statement;
     const { symbolTable } = context;
 
-    if (operand2.type === 'ImmidiateExpression') operand2.value = evalExpression(operand2, symbolTable, location);
+    if (operand2.type === 'ImmediateExpression') operand2.value = evalExpression(operand2, symbolTable, location);
 
     const { shift } = operand2;
 
@@ -416,14 +416,14 @@ export class Assembler {
         rd,
         rn,
         i: 1,
-        offset: { type: 'ImmidiateExpression', value: Math.abs(delta) },
+        offset: { type: 'ImmediateExpression', value: Math.abs(delta) },
         u: upDown,
         b: byteWord,
       });
     } else {
       const { writeBack, prePost, i } = statement;
 
-      if (offset.type === 'ImmidiateExpression') {
+      if (offset.type === 'ImmediateExpression') {
         offset.value = evalExpression(offset, symbolTable, location);
       } else {
         const { shift } = offset;
@@ -440,7 +440,7 @@ export class Assembler {
     const { symbolTable } = context;
     const b = opCode === STRB ? 1 : 0;
 
-    if (offset.type === 'ImmidiateExpression') {
+    if (offset.type === 'ImmediateExpression') {
       offset.value = evalExpression(offset, symbolTable, location);
     } else {
       const { shift } = offset;

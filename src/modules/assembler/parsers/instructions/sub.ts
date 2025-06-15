@@ -32,7 +32,7 @@ export const sub = map(
     const rd = value[5];
     const rn = value[8];
     const operand2 = value[12];
-    const i = operand2.type === 'ImmidiateExpression' ? 1 : 0;
+    const i = operand2.type === 'ImmediateExpression' ? 1 : 0;
 
     return {
       type: 'Instruction',
