@@ -175,7 +175,7 @@ export class CPU implements CPUInterface {
       return { carry, value };
     }
 
-    const registerValue = this.#getRegister(instruction & 0xff);
+    const registerValue = this.#getRegister(instruction & 0xf);
     const shift = (instruction >> 4) & 0xff;
 
     if (shift) {
