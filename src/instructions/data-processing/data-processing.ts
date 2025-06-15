@@ -1,4 +1,4 @@
-import { DATA_PROCESSING } from '../../constants/codes';
+import { DATA_PROCESSING, SHIFT_SOURCE_IMMEDIATE, SHIFT_SOURCE_REGISTER } from '../../constants/codes';
 import { AL } from '../../constants/codes/condition';
 import { Instruction } from '../../modules/cpu/types';
 import { Condition } from '../../types/codes/condition';
@@ -44,14 +44,19 @@ export const dataProcessing = (args: DataProcessingArgs): Instruction => {
     instruction = (instruction | (operand2Value & 0xf)) >>> 0;
 
     if (shift) {
-      const { type, amount, register } = shift;
+      const { source, type } = shift;
 
       instruction = (instruction | (type << 5)) >>> 0;
 
-      if (register !== undefined) {
-        instruction = (instruction | 1) >>> 0;
+      if (source === SHIFT_SOURCE_REGISTER) {
+        const { register } = shift;
+
+        instruction = (instruction | (SHIFT_SOURCE_REGISTER << 4)) >>> 0;
         instruction = (instruction | (register << 8)) >>> 0;
       } else {
+        const { amount } = shift;
+
+        instruction = (instruction | (SHIFT_SOURCE_IMMEDIATE << 4)) >>> 0;
         instruction = (instruction | (amount << 7)) >>> 0;
       }
     }

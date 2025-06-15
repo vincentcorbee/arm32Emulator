@@ -1,4 +1,5 @@
-import { AL, SINGLE_DATA_TRANSFER } from '../../constants/codes';
+import { AL, SHIFT_SOURCE_IMMEDIATE, SHIFT_SOURCE_REGISTER, SINGLE_DATA_TRANSFER } from '../../constants/codes';
+import { Instruction } from '../../modules/cpu/types';
 import { Shift } from '../../types/shift';
 
 export type ImmidiateOffset = {
@@ -27,42 +28,47 @@ export type SingleDataTransferArgs = {
   offset: Offset;
 };
 
-export const singleDataTransfer = (args: SingleDataTransferArgs) => {
+export const singleDataTransfer = (args: SingleDataTransferArgs): Instruction => {
   const { cond = AL, p = 0, u: u = 1, b = 0, w = 0, i, l, rn, rd, offset } = args;
 
-  let value = (cond << 28) >>> 0;
+  let instruction = (cond << 28) >>> 0;
 
-  value = (value | (SINGLE_DATA_TRANSFER << 26)) >>> 0;
-  value = (value | (i << 25)) >>> 0;
-  value = (value | (p << 24)) >>> 0;
-  value = (value | (u << 23)) >>> 0;
-  value = (value | (b << 22)) >>> 0;
-  value = (value | (w << 21)) >>> 0;
-  value = (value | (l << 20)) >>> 0;
-  value = (value | (rn << 16)) >>> 0;
-  value = (value | (rd << 12)) >>> 0;
+  instruction = (instruction | (SINGLE_DATA_TRANSFER << 26)) >>> 0;
+  instruction = (instruction | (i << 25)) >>> 0;
+  instruction = (instruction | (p << 24)) >>> 0;
+  instruction = (instruction | (u << 23)) >>> 0;
+  instruction = (instruction | (b << 22)) >>> 0;
+  instruction = (instruction | (w << 21)) >>> 0;
+  instruction = (instruction | (l << 20)) >>> 0;
+  instruction = (instruction | (rn << 16)) >>> 0;
+  instruction = (instruction | (rd << 12)) >>> 0;
 
   const { type, value: offsetValue } = offset;
 
-  if (type === 'ImmidiateExpression') value = (value | (offsetValue & 0xfff)) >>> 0;
+  if (type === 'ImmidiateExpression') instruction = (instruction | (offsetValue & 0xfff)) >>> 0;
   else {
     const { shift } = offset;
 
-    value = (value | (offsetValue & 0xf)) >>> 0;
+    instruction = (instruction | (offsetValue & 0xf)) >>> 0;
 
     if (shift) {
-      const { type, amount, register } = shift;
+      const { source, type } = shift;
 
-      value = (value | (type << 5)) >>> 0;
+      instruction = (instruction | (type << 5)) >>> 0;
 
-      if (register !== undefined) {
-        value = (value | 1) >>> 0;
-        value = (value | (register << 8)) >>> 0;
+      if (source === SHIFT_SOURCE_REGISTER) {
+        const { register } = shift;
+
+        instruction = (instruction | (SHIFT_SOURCE_REGISTER << 4)) >>> 0;
+        instruction = (instruction | (register << 8)) >>> 0;
       } else {
-        value = (value | (amount << 7)) >>> 0;
+        const { amount } = shift;
+
+        instruction = (instruction | (SHIFT_SOURCE_IMMEDIATE << 4)) >>> 0;
+        instruction = (instruction | (amount << 7)) >>> 0;
       }
     }
   }
 
-  return value;
+  return instruction;
 };

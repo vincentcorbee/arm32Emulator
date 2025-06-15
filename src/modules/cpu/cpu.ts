@@ -48,7 +48,7 @@ import { AL, EQ, GE, GT, LE, LT, NE } from '../../constants/codes/condition';
 import { M, SUPERVISOR, UND, USER } from '../../constants/codes/modes';
 import { ADD, CMP, MOV, MVN, SUB } from '../../constants/codes/op-codes';
 import { ASR, LSL, LSR, ROR, RRX } from '../../constants/codes/shift-types';
-import { SHIFT_SOURCE_REGISTER } from '../../constants/codes/shift-source-types';
+import { SHIFT_SOURCE_REGISTER } from '../../constants/codes/shift-source';
 import { EXIT_SYS_CALL, WRITE_SYS_CALL } from '../../constants/codes/sys-calls';
 import { Register } from '../../types/codes/register';
 import { RegisterCodesToNames } from '../../constants/maps';
@@ -722,6 +722,15 @@ export class CPU implements CPUInterface {
     this.#setRegister(CPSR, this.#getRegister(SPSR_UND));
   };
 
+  /**
+   * Register
+   * 11             4 3    0
+   *      Shift        RM
+   *
+   * Immediate value
+   * 11     8 7            0
+   *  Rotate        IMM
+   */
   #getSecondOperandValue(instruction: Instruction): SecondOperandValue {
     const immediate = (instruction >> 25) & 0x1;
 
@@ -733,7 +742,7 @@ export class CPU implements CPUInterface {
       return { carry, value };
     }
 
-    const registerValue = this.#getRegister(instruction & 0xff);
+    const registerValue = this.#getRegister(instruction & 0xf);
     const shift = (instruction >> 4) & 0xff;
 
     if (shift) {
@@ -784,6 +793,8 @@ export class CPU implements CPUInterface {
 
       return { carry, value };
     }
+
+    console.log({ value, shift });
 
     const result = (value << shift) >>> 0;
     const carry = (value >>> (32 - shift)) & 0x1;

@@ -3,7 +3,7 @@ export * from './modes';
 export * from './registers';
 export * from './op-codes';
 export * from './shift-types';
-export * from './shift-source-types';
+export * from './shift-source';
 export * from './sys-calls';
 export * from './class-codes';
 export * from './flags';

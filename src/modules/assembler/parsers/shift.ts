@@ -6,6 +6,7 @@ import { optionalWhitespace } from './optional-whitespace';
 import { register } from './register';
 import { shiftType } from './shift-type';
 import { comma } from './tokens';
+import { SHIFT_SOURCE_IMMEDIATE, SHIFT_SOURCE_REGISTER } from '../../../constants/codes';
 
 export const shift = optional(
   map(
@@ -16,12 +17,14 @@ export const shift = optional(
 
       if (shiftSrc.type === 'ImmidiateExpression') {
         return {
+          source: SHIFT_SOURCE_IMMEDIATE,
           type,
           amount: shiftSrc,
         };
       }
 
       return {
+        source: SHIFT_SOURCE_REGISTER,
         type,
         register: shiftSrc.value,
       };
