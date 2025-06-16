@@ -1,8 +1,9 @@
+import assert from 'node:assert';
 import test, { describe } from 'node:test';
+
 import { CPSR, N, R0, R1 } from '../../src/constants/codes';
 import { mvn } from '../../src/instructions';
 import { CPU, Memory, MemoryController } from '../../src/modules';
-import assert from 'node:assert';
 
 describe('MVN instruction', () => {
   const memory = new Memory(1024);

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Arm32 emulator in JavaScript",
   "scripts": {
-    "test": "node --test --require ts-node/register ./**/*spec.ts"
+    "test": "node --test --require ts-node/register ./**/*.spec.ts"
   },
   "keywords": [],
   "author": "V.J.M. Corbee",

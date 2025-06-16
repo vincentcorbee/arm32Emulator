@@ -1,8 +1,9 @@
-import test, { describe } from 'node:test';
-import { Memory } from '../src/modules/memory';
-import { MemoryController } from '../src/modules/memory-controller';
-import { CPU } from '../src/modules/cpu';
 import assert from 'node:assert';
+import test, { describe } from 'node:test';
+
+import { Memory } from '../memory';
+import { MemoryController } from '../memory-controller';
+import { CPU } from './cpu';
 import {
   CPSR,
   M,
@@ -24,7 +25,7 @@ import {
   R9,
   SP,
   USER,
-} from '../src/constants/codes';
+} from '../../constants/codes';
 
 describe('CPU', () => {
   const memory = new Memory(1024);

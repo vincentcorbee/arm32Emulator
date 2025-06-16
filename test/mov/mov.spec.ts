@@ -1,9 +1,12 @@
+import assert from 'node:assert';
 import test, { describe } from 'node:test';
+
 import {
   CPSR,
   LSL,
   LSR,
   N,
+  PC,
   R0,
   R1,
   R2,
@@ -14,7 +17,6 @@ import {
 } from '../../src/constants/codes';
 import { mov } from '../../src/instructions';
 import { CPU, Memory, MemoryController } from '../../src/modules';
-import assert from 'node:assert';
 
 describe('MOV instruction', () => {
   const memory = new Memory(1024);
@@ -86,5 +88,9 @@ describe('MOV instruction', () => {
     cpu.cycle();
 
     assert.equal(cpu.getRegister(R4), 0xff000000);
+  });
+
+  test('PC should be at address 32', () => {
+    assert.equal(cpu.getRegister(PC), 32);
   });
 });

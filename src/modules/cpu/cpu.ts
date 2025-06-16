@@ -794,8 +794,6 @@ export class CPU implements CPUInterface {
       return { carry, value };
     }
 
-    console.log({ value, shift });
-
     const result = (value << shift) >>> 0;
     const carry = (value >>> (32 - shift)) & 0x1;
 

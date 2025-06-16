@@ -1,8 +1,9 @@
-import test, { describe } from 'node:test';
 import assert from 'node:assert';
+import test, { describe } from 'node:test';
+
 import { program } from './program';
 
-describe('program', () => {
+describe('program parser', () => {
   test('should fail', () => {
     const result = program.parse('ldrb r3, [r2]\nfoo\n');
 

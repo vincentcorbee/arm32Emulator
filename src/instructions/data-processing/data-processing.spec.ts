@@ -1,7 +1,8 @@
+import assert from 'node:assert';
 import test, { describe } from 'node:test';
+
 import { dataProcessing } from './data-processing';
 import { AL, ASR, LSL, LSR, MOV, R1, ROR, SHIFT_SOURCE_IMMEDIATE, SHIFT_SOURCE_REGISTER } from '../../constants/codes';
-import assert from 'node:assert';
 describe('dataProcessing', () => {
   test('should set the correct bits for immedidate value', () => {
     const instruction = dataProcessing({
