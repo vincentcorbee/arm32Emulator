@@ -551,25 +551,27 @@ export class Assembler {
   };
 
   #zeroHandler = (statement: any, context: Context, pass: 1 | 2 | 3, memory: Memory): void | boolean => {
-    const { currentSection, textSection } = context;
+    const { currentSection, textSection, symbolTable } = context;
     const { type } = currentSection;
-    const { value } = statement;
 
     if (pass === 1) {
       const { entries, locationCounter } = currentSection;
+      const size = evalExpression(statement.value, symbolTable, locationCounter);
+
       this.#updateLabels(context);
 
       statement.location = locationCounter;
-      currentSection.locationCounter += value.length;
+      statement.size = size;
+      currentSection.locationCounter += size;
       entries.push(statement);
 
       return false;
     }
 
-    const { location } = statement;
+    const { location, size } = statement;
     const address = location + (type === 'data' ? textSection.locationCounter : 0);
 
-    for (let i = 0; i < value; i++) {
+    for (let i = 0; i < size; i++) {
       memory.writeUint8(address + i, 0);
     }
   };
