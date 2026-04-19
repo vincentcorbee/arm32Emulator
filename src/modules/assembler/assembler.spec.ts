@@ -7,8 +7,7 @@ import { blockDataTransfer } from '../../instructions/block-data-transfer/block-
 import { dataProcessing } from '../../instructions/data-processing/data-processing';
 import { mul } from '../../instructions/multiply';
 import { Memory } from '../memory/memory';
-import { VECTOR_TABLE_END } from './assemble';
-import { Assembler } from './assembler';
+import { Assembler, VECTOR_TABLE_END } from './assembler';
 
 const newMemory = (size = 1024): Memory => new Memory(size);
 
@@ -352,7 +351,7 @@ describe('Assembler', () => {
       const memory = newMemory();
       const source = `.global nums\n.global _start\n_start:\n  mov r0, #0\n.data\nnums: .word 0x11223344, 0xaabbccdd\n`;
 
-      const numsAddr = assembler.assemble(source, memory, { e: 'nums' });
+      const numsAddr = assembler.assemble(source, memory, { e: 'nums' }) as number;
 
       assert.equal(memory.readUint32(numsAddr), 0x11223344);
       assert.equal(memory.readUint32(numsAddr + 4), 0xaabbccdd);
@@ -363,7 +362,7 @@ describe('Assembler', () => {
       const memory = newMemory();
       const source = `.global msg\n.global _start\n_start:\n  mov r0, #0\n.data\nmsg: .ascii "hi"\n`;
 
-      const msgAddr = assembler.assemble(source, memory, { e: 'msg' });
+      const msgAddr = assembler.assemble(source, memory, { e: 'msg' }) as number;
 
       assert.equal(memory.readUint8(msgAddr), 'h'.charCodeAt(0));
       assert.equal(memory.readUint8(msgAddr + 1), 'i'.charCodeAt(0));
@@ -385,7 +384,7 @@ describe('Assembler', () => {
 
       for (let i = 0; i < 8; i++) memory.writeUint8(VECTOR_TABLE_END + 0x1c + i, 0xff);
 
-      const bufAddr = assembler.assemble(source, memory, { e: 'buf' });
+      const bufAddr = assembler.assemble(source, memory, { e: 'buf' }) as number;
 
       assert.equal(memory.readUint8(bufAddr), 0);
       assert.equal(memory.readUint8(bufAddr + 1), 0);
