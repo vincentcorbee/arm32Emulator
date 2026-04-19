@@ -1,3 +1,7 @@
+export interface ParserInterface<T> {
+  parse(input: string, parserState: ParserState): Result<T>;
+}
+
 export type Result<T = any> = Success<T> | Failure;
 
 export type Position = {

@@ -1,6 +1,7 @@
 import {
   ADD,
   B,
+  BIC,
   BL,
   BX,
   CMP,
@@ -10,6 +11,7 @@ import {
   MOV,
   MUL,
   MVN,
+  ORR,
   POP,
   PUSH,
   STM,
@@ -24,7 +26,6 @@ import { blockDataTransfer } from '../../instructions/block-data-transfer/block-
 import { dataProcessing } from '../../instructions/data-processing/data-processing';
 import { char, either, map } from '../parser-combinators';
 import { Memory } from '../memory/types';
-import { AssemblerArgs, getPreprocessOptions, VECTOR_TABLE_END } from './assemble';
 import { evalExpression } from './eval-expression';
 import { program } from './parsers';
 import { comment, multilineComment } from './parsers/comments';
@@ -41,6 +42,27 @@ import {
   Section,
   SymbolTable,
 } from './types';
+import { Failure, Result } from '../parser-combinators/types';
+
+export type CPUType = 'arm7di';
+
+export type AssemblerArgs = {
+  e?: string;
+  mcpu?: CPUType;
+};
+
+export const VECTOR_TABLE_END = 0x0000001c;
+
+export const getPreprocessOptions = (cpuType: CPUType): PreProcessOptions => {
+  switch (cpuType) {
+    case 'arm7di':
+      return {
+        commentIdentifier: '@',
+      };
+    default:
+      throw Error('Unknown CPU type');
+  }
+};
 
 export class Assembler {
   #handlers: Record<string, Handler>;
@@ -69,6 +91,8 @@ export class Assembler {
       [SUB]: this.#dataProcessingHandler,
       [ADD]: this.#dataProcessingHandler,
       [CMP]: this.#dataProcessingHandler,
+      [ORR]: this.#dataProcessingHandler,
+      [BIC]: this.#dataProcessingHandler,
       [MUL]: this.#multiplyHandler,
       [LDR]: this.#singleDataTransferHandler,
       [LDRB]: this.#singleDataTransferHandler,
@@ -97,23 +121,21 @@ export class Assembler {
     };
   }
 
-  assemble(source: string, memory: Memory, args?: AssemblerArgs): number {
+  assemble(source: string, memory: Memory, args?: AssemblerArgs): number | Failure {
     const { e = '_start', mcpu = 'arm7di' } = args ?? {};
     const startAddress = VECTOR_TABLE_END;
     const preProcessOptions = getPreprocessOptions(mcpu);
     const preProcessResult = this.#preProcess(source, preProcessOptions);
 
     if (!preProcessResult.success) {
-      console.error(preProcessResult);
-      process.exit(1);
+      return preProcessResult;
     }
 
     const { value } = preProcessResult;
     const result = program.parse(value);
 
     if (!result.success) {
-      console.error(result);
-      process.exit(1);
+      return result;
     } else {
       const body = result.value.body as any[];
       const globalSymbols: GlobalSymbols = new Set();
@@ -654,8 +676,9 @@ export class Assembler {
     return false;
   };
 
-  #preProcess(src: string, options?: PreProcessOptions) {
+  #preProcess(src: string, options?: PreProcessOptions): Result<string> {
     const { commentIdentifier = ';' } = options || {};
+
     let current = 0;
     let value = '';
     let state = { position: { index: 0, line: 1, column: 1 } };
@@ -670,7 +693,7 @@ export class Assembler {
         ),
       ).parse(src, state);
 
-      if (!result.success) break;
+      if (!result.success) return result;
 
       current = result.position.index;
 

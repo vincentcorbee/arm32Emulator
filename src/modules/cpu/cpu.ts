@@ -5,6 +5,7 @@ import {
   ConditionHandlers,
   CPUInterface,
   DataProcessingHandlers,
+  FormattedRegisters,
   Instruction,
   InstructionHandlers,
   Pipeline,
@@ -46,7 +47,7 @@ import { C, N, V, Z } from '../../constants/codes/flags';
 import { N as N_FLAG, C as C_FLAG, Z as Z_FLAG, V as V_FLAG } from '../../constants/mnemonics/flags';
 import { AL, EQ, GE, GT, LE, LT, NE } from '../../constants/codes/condition';
 import { M, SUPERVISOR, UND, USER } from '../../constants/codes/modes';
-import { ADD, CMP, MOV, MVN, SUB } from '../../constants/codes/op-codes';
+import { ADD, CMP, MOV, MVN, SUB, ORR, BIC } from '../../constants/codes/op-codes';
 import { ASR, LSL, LSR, ROR, RRX } from '../../constants/codes/shift-types';
 import { SHIFT_SOURCE_REGISTER } from '../../constants/codes/shift-source';
 import { EXIT_SYS_CALL, WRITE_SYS_CALL } from '../../constants/codes/sys-calls';
@@ -54,6 +55,9 @@ import { Register } from '../../types/codes/register';
 import { RegisterCodesToNames } from '../../constants/maps';
 import { Condition } from '../../types/codes/condition';
 import { formatHex } from '../../utils';
+import { Exit, IOChannel, System } from '../../types/system';
+import { getSystem } from './helpers';
+import { GeneralRegisterName, StatusRegisterName } from '../../types/mnemonics/registers';
 
 export class CPU implements CPUInterface {
   #registers: RegistersMap;
@@ -67,13 +71,27 @@ export class CPU implements CPUInterface {
   #blockDataTransferHandlers: BlockDataTransferHandlers;
   #conditionHandlers: ConditionHandlers;
   #shiftHandlers: ShiftHandlers;
+  #stdin: IOChannel;
+  #stdout: IOChannel;
+  #stderr: IOChannel;
+  #exit: Exit;
+  #timeoutID: number | NodeJS.Immediate | null;
+  #isRunning: boolean;
+  #listeners: Record<'cycle', Array<(data: any) => void>>;
 
-  constructor(memoryController: MemoryController) {
+  constructor(memoryController: MemoryController, system: System = getSystem()) {
     this.#registers = REGISTERS;
     this.#registerMemory = new Memory(this.#registers.size * 4);
     this.#memoryController = memoryController;
     this.#pipeline = { fetch: null, decode: null, execute: null };
     this.#cylces = 0;
+    this.#stdin = system.io.stdin;
+    this.#stdout = system.io.stdout;
+    this.#stderr = system.io.stderr;
+    this.#exit = system.exit;
+    this.#timeoutID = null;
+    this.#isRunning = false;
+    this.#listeners = { cycle: [] };
 
     this.#instructionHandlers = {
       [DATA_PROCESSING_REGISTER]: this.#dataProcessingHandler,
@@ -94,6 +112,8 @@ export class CPU implements CPUInterface {
       [ADD]: this.#ADDHandler,
       [SUB]: this.#SUBHandler,
       [CMP]: this.#CMPHandler,
+      [ORR]: this.#ORRHandler,
+      [BIC]: this.#BICHandler,
     };
 
     this.#singleDataTransferHandlers = {
@@ -142,7 +162,52 @@ export class CPU implements CPUInterface {
     throw Error(`Invalid register: ${RegisterCodesToNames[register]}`);
   }
 
+  getRegistersFormatted(): FormattedRegisters {
+    const result = {} as FormattedRegisters;
+
+    this.#registers.keys().forEach((register) => {
+      const name = RegisterCodesToNames[register as Register];
+
+      /* Omit banked registers */
+      if (!name.includes('_')) {
+        const value = this.#getRegister(register);
+
+        const contents = formatHex(value);
+
+        let ascii = '';
+
+        if (register === CPSR) {
+          ascii = this.#getContentsPSR(register);
+        } else if (register !== PC) {
+          for (let shift = 24; shift >= 0; shift -= 8) {
+            const charCode = (value >>> shift) & 0xff;
+
+            if (charCode >= 0x20 && charCode <= 0x7e) {
+              ascii += String.fromCharCode(charCode);
+            } else {
+              ascii += '·';
+            }
+          }
+        }
+
+        result[name as GeneralRegisterName | StatusRegisterName] = { contents, ascii };
+      }
+    });
+
+    const name = RegisterCodesToNames[SPSR];
+    const register = this.#getSPSR();
+    const value = register === SPSR ? 0 : this.#getRegister(register);
+    const ascii = register === SPSR ? '....' : this.#getContentsPSR(register);
+    const contents = formatHex(value);
+
+    result[name as StatusRegisterName] = { contents, ascii };
+
+    return result;
+  }
+
   viewRegisters(): void {
+    let result = '';
+
     this.#registers.keys().forEach((register) => {
       const name = RegisterCodesToNames[register as Register];
 
@@ -166,10 +231,10 @@ export class CPU implements CPUInterface {
           }
         }
 
-        process.stdout.write(`${line}\n`);
+        result += `${line}\n`;
       }
 
-      if (register === PC) process.stdout.write('\n');
+      if (register === PC) result += '\n';
     });
 
     const name = RegisterCodesToNames[SPSR];
@@ -178,7 +243,41 @@ export class CPU implements CPUInterface {
     const contents = register === SPSR ? '....' : this.#getContentsPSR(register);
     const line = `${name}:${' '.repeat(5 - name.length)}${formatHex(value)} ${contents}`;
 
-    process.stdout.write(`${line}\n\n`);
+    result += line;
+
+    this.#stdout.write(`${result}\n`);
+  }
+
+  on(event: 'cycle', cb: (data: any) => void) {
+    const listeners = this.#listeners[event];
+
+    if (!listeners) return this;
+
+    if (listeners.some((listener) => listener === cb)) return this;
+
+    listeners.push(cb);
+
+    return this;
+  }
+
+  off(event: 'cycle', cb: (data: any) => void) {
+    const listeners = this.#listeners[event];
+
+    if (!listeners) return this;
+
+    this.#listeners[event] = listeners.filter((listener) => listener !== cb);
+
+    return this;
+  }
+
+  emit(event: 'cycle', ...data: any[]) {
+    const listeners = this.#listeners[event];
+
+    if (!listeners) return this;
+
+    listeners.forEach((listener) => listener(data));
+
+    return this;
   }
 
   /**
@@ -201,15 +300,44 @@ export class CPU implements CPUInterface {
 
     /* Fill pipeline */
     if (!this.#pipeline.execute) this.cycle();
+    else this.emit('cycle');
   }
 
   /**
    * The CPU runs forever until the program is terminated.
    */
   run(): void {
-    while (true) {
-      this.cycle();
+    if (!this.#isRunning) return;
+
+    this.cycle();
+
+    if (typeof setImmediate === 'function') {
+      this.#timeoutID = setImmediate(this.run.bind(this));
+    } else {
+      this.#timeoutID = requestAnimationFrame(this.run.bind(this));
     }
+  }
+
+  start(): void {
+    if (this.#isRunning) return;
+
+    this.#isRunning = true;
+    this.run();
+  }
+
+  stop(): void {
+    const timeoutID = this.#timeoutID;
+
+    if (timeoutID === null) return;
+
+    if (typeof clearImmediate === 'function') {
+      clearImmediate(timeoutID as NodeJS.Immediate);
+    } else {
+      cancelAnimationFrame(timeoutID as number);
+    }
+
+    this.#timeoutID = null;
+    this.#isRunning = false;
   }
 
   /**
@@ -360,6 +488,56 @@ export class CPU implements CPUInterface {
       this.#setCarryFlag(carry === 1);
       this.#setNegativeFlag(((negatedValue >>> 31) & 0x1) === 1);
       this.#setZeroFlag(negatedValue === 0);
+    }
+  };
+
+  /**
+    ORR{cond}{S} Rd, Rn, <Op2>
+
+    4x   2x x 4x     x 4x 4x 12x
+    Cond 00 I Opcode S Rn Rd Op2
+  */
+  #ORRHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return;
+
+    const s = (instruction >> 20) & 0x1;
+    const rn = (instruction >> 16) & 0xf;
+    const rd = (instruction >> 12) & 0xf;
+    const left = this.#getRegister(rn);
+    const { carry, value: right } = this.#getSecondOperandValue(instruction);
+    const result = left | right;
+
+    this.#setRegister(rd, result);
+
+    if (s) {
+      this.#setCarryFlag(carry === 1);
+      this.#setNegativeFlag(((result >>> 31) & 0x1) === 1);
+      this.#setZeroFlag(result === 0);
+    }
+  };
+
+  /**
+    BIC{cond}{S} Rd, Rn, <Op2>
+
+    4x   2x x 4x     x 4x 4x 12x
+    Cond 00 I Opcode S Rn Rd Op2
+  */
+  #BICHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return;
+
+    const s = (instruction >> 20) & 0x1;
+    const rn = (instruction >> 16) & 0xf;
+    const rd = (instruction >> 12) & 0xf;
+    const left = this.#getRegister(rn);
+    const { carry, value: right } = this.#getSecondOperandValue(instruction);
+    const result = left & right;
+
+    this.#setRegister(rd, result);
+
+    if (s) {
+      this.#setCarryFlag(carry === 1);
+      this.#setNegativeFlag(((result >>> 31) & 0x1) === 1);
+      this.#setZeroFlag(result === 0);
     }
   };
 
@@ -659,7 +837,7 @@ export class CPU implements CPUInterface {
       case EXIT_SYS_CALL: {
         const exitCode = this.#getRegister(R0) & 0xff;
 
-        process.exit(exitCode);
+        return this.#exit(exitCode);
       }
       case WRITE_SYS_CALL: {
         const fd = this.#getRegister(R0);
@@ -667,8 +845,8 @@ export class CPU implements CPUInterface {
         const length = this.#getRegister(R2);
         const buffer = new Uint8Array(this.#memoryController.getBufferSlice(bufferAddress, length));
 
-        if (fd === 1) process.stdout.write(buffer);
-        else if (fd === 2) process.stderr.write(buffer);
+        if (fd === 1) this.#stdout.write(buffer);
+        else if (fd === 2) this.#stderr.write(buffer);
         else throw Error(`Unknown file descriptor: ${fd}`);
 
         break;
@@ -715,7 +893,7 @@ export class CPU implements CPUInterface {
 
     this.#flushPipeline();
 
-    process.stderr.write(`Undefined instruction: ${instruction.toString(2).padStart(32, '0')}\n`);
+    this.#stderr.write(`Undefined instruction: ${instruction.toString(2).padStart(32, '0')}\n`);
 
     /* Restore CPSR and PC */
     this.#setRegister(PC, this.#getRegister(R14_UND));

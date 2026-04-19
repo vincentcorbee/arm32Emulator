@@ -1,4 +1,4 @@
-import { either, map, char, string } from '../parser-combinators';
+import { either, map, char } from '../parser-combinators';
 import { multilineComment, comment } from './parsers/comments';
 import { not } from './parsers/not';
 import { doubleQuote, endMultilineComment, stringConstant } from './parsers/tokens';
@@ -9,6 +9,7 @@ export type PreProcessOptions = {
 
 export const preProcess = (src: string, options?: PreProcessOptions) => {
   const { commentIdentifier = ';' } = options || {};
+
   let current = 0;
   let value = '';
   let state = { position: { index: 0, line: 1, column: 1 } };

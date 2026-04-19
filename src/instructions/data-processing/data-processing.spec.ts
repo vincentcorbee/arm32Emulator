@@ -15,6 +15,17 @@ describe('dataProcessing', () => {
     assert.equal(instruction, 0b11100011101000000000000000000010);
   });
 
+  test('should set the correct bits for immedidate value', () => {
+    const instruction = dataProcessing({
+      operand2: { value: 2, type: 'ImmediateExpression' },
+      opCode: MOV,
+      cond: AL,
+      i: 1,
+    });
+
+    assert.equal(instruction, 0b11100011101000000000000000000010);
+  });
+
   test('should set the correct bits for a rotated immedidate value', () => {
     const instruction = dataProcessing({
       operand2: { value: 2, type: 'ImmediateExpression', rotate: 3 },

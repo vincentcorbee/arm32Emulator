@@ -1,6 +1,6 @@
 node_modules
 docs
 .vscode
-README.md
+*.md
 package-lock.yaml
 **/*.s

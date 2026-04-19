@@ -1,10 +1,10 @@
 import { RegisterNameToCode } from '../../constants/maps';
-import { Register } from '../cpu/types';
+import { RegisterName } from '../../types/mnemonics/registers';
 
 export function getRegisterCode(node: any): any {
   const { value } = node;
 
-  const register = RegisterNameToCode[value as Register];
+  const register = RegisterNameToCode[value as RegisterName];
 
   if (register === undefined) throw Error(`Unknown register ${value}`);
 

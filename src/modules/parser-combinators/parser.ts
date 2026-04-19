@@ -1,6 +1,6 @@
-import { ParserFunction, ParserState, Result } from './types';
+import { ParserFunction, ParserInterface, ParserState, Result } from './types';
 
-export class Parser<T = any> {
+export class Parser<T = any> implements ParserInterface<T> {
   #parserFunction: ParserFunction<T>;
 
   constructor(parserFunction: ParserFunction<T>) {

@@ -1,4 +1,4 @@
-export function toIEEE754SinglePrecision(value: number) {
+export function toIEEE754SinglePrecision(value: number): number {
   let sign: number;
   let exponent: number;
   let mantissa: number;

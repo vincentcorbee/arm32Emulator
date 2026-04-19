@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
-import { CPU, Memory, MemoryController } from '../src';
 import path from 'node:path';
-import { Assembler } from '../src/modules/assembler/assembler';
+
+import { Assembler, CPU, Memory, MemoryController } from '../dist';
 
 const args = process.argv.slice(2);
 const [file] = args;
@@ -15,6 +15,13 @@ memoryController.mapDevice(0, memory.buffer.byteLength, memory);
 
 const cpu = new CPU(memoryController);
 const start = assembler.assemble(source, memory, { e: '_start' });
+
+if (typeof start !== 'number') {
+  console.error(start);
+
+  process.exit(1);
+}
+
 const input = process.stdin;
 
 /* Set the program counter to the start of the program */

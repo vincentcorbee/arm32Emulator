@@ -3,7 +3,6 @@
 // import { Memory } from "./modules/memory";
 // import { MemoryController } from "./modules/memory-controller";
 
-import { assemble } from '../src/modules/assembler';
 import { log } from '../src/modules/assembler/helpers';
 import { program } from '../src/modules/assembler/parsers';
 import { mov } from '../src/modules/assembler/parsers/instructions/mov';

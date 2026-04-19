@@ -21,7 +21,7 @@ import {
   R9,
   SP,
 } from '../../../constants/mnemonics';
-import { Register } from '../../../types/mnemonics/registers';
+import { RegisterName } from '../../../types/mnemonics/registers';
 import { either, map } from '../../parser-combinators';
 
 import { createNode } from './mappers';
@@ -50,5 +50,5 @@ export const register = map(
     upperOrLower(R8),
     upperOrLower(R9),
   ),
-  (value) => createNode('Register')(RegisterNameToCode[value as Register]),
+  (value) => createNode('Register')(RegisterNameToCode[value as RegisterName]),
 );

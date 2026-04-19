@@ -1,4 +1,4 @@
-import { Register as RegisterName } from '../../types/mnemonics/registers';
+import { RegisterName as RegisterName } from '../../types/mnemonics/registers';
 import { Register as RegisterCode } from '../../types/codes/register';
 import {
   R0,

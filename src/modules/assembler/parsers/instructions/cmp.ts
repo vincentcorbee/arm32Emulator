@@ -12,7 +12,7 @@ export const cmp = map(
     const { value: opCode, mnemonic } = value[0];
     const rn = value[2].value;
     const operand2 = value[6];
-    const i = operand2.type === 'ImmidateExpression' ? 1 : 0;
+    const i = operand2.type === 'ImmediateExpression' ? 1 : 0;
 
     return {
       type: 'Instruction',

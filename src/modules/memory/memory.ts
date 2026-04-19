@@ -52,7 +52,7 @@ export class Memory implements MemoryInterface {
     return String.fromCharCode(this.readUint8(offset));
   }
 
-  view(): void {
+  view(cb?: (data: string) => void): void {
     const byteLength = this.#buffer.byteLength;
     const rows = Math.floor(byteLength / 16);
 
@@ -88,7 +88,13 @@ export class Memory implements MemoryInterface {
 
       line += ` ${chars}\n`;
 
-      process.stdout.write(line);
+      try {
+        if (globalThis.process !== undefined) process.stdout.write(line);
+      } catch (error) {
+        console.log(error);
+      }
+
+      if (cb) cb(line);
     }
   }
 
@@ -129,7 +135,11 @@ export class Memory implements MemoryInterface {
 
       line += ` ${chars}\n`;
 
-      process.stdout.write(line);
+      try {
+        if (globalThis.process !== undefined) process.stdout.write(line);
+      } catch (error) {
+        console.log(error);
+      }
     }
   }
 }

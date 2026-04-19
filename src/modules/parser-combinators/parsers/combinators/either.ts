@@ -8,5 +8,5 @@ export const either = <T = string>(...choices: Parser[]) =>
       if (result.success) return result;
     }
 
-    return { success: false, message: 'No parser matched', position: { ...state.position } };
+    return { success: false, message: 'Unexpected token', position: { ...state.position } };
   });

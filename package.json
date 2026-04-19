@@ -2,8 +2,10 @@
   "name": "@digitalbranch/vm",
   "version": "1.0.0",
   "description": "Arm32 emulator in JavaScript",
+  "main": "dist/index.js",
   "scripts": {
-    "test": "node --test --require ts-node/register ./**/*.spec.ts"
+    "test": "node --test --require ts-node/register ./**/*.spec.ts",
+    "build": "tsc -p ./tsconfig.build.json"
   },
   "keywords": [],
   "author": "V.J.M. Corbee",
