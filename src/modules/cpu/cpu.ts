@@ -179,15 +179,7 @@ export class CPU implements CPUInterface {
         if (register === CPSR) {
           ascii = this.#getContentsPSR(register);
         } else if (register !== PC) {
-          for (let shift = 24; shift >= 0; shift -= 8) {
-            const charCode = (value >>> shift) & 0xff;
-
-            if (charCode >= 0x20 && charCode <= 0x7e) {
-              ascii += String.fromCharCode(charCode);
-            } else {
-              ascii += '·';
-            }
-          }
+          ascii = this.#getCharacters(value);
         }
 
         result[name as GeneralRegisterName | StatusRegisterName] = { contents, ascii };
@@ -220,15 +212,7 @@ export class CPU implements CPUInterface {
         if (register === CPSR) {
           line += this.#getContentsPSR(register);
         } else if (register !== PC) {
-          for (let shift = 24; shift >= 0; shift -= 8) {
-            const charCode = (value >>> shift) & 0xff;
-
-            if (charCode >= 0x20 && charCode <= 0x7e) {
-              line += String.fromCharCode(charCode);
-            } else {
-              line += '·';
-            }
-          }
+          line += this.#getCharacters(value);
         }
 
         result += `${line}\n`;
@@ -1130,6 +1114,22 @@ export class CPU implements CPUInterface {
 
     return contents;
   }
+
+  #getCharacters(value: number): string {
+  let characters = '';
+
+  for (let shift = 24; shift >= 0; shift -= 8) {
+    const charCode = (value >>> shift) & 0xff;
+
+    if (charCode >= 0x20 && charCode <= 0x7e) {
+      characters += String.fromCharCode(charCode);
+    } else {
+      characters += '·';
+    }
+  }
+
+  return characters;
+}
 
   /**
    * Resets the pipeline which is needed when we branch to a new address.

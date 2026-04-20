@@ -24,25 +24,32 @@ import { ASCII, DATA, EQUIV, FLOAT, GLOBAL, STRING, TEXT, WORD, ZERO } from '../
 import { b, bx, ldr, mul, str, svc } from '../../instructions';
 import { blockDataTransfer } from '../../instructions/block-data-transfer/block-data-transfer';
 import { dataProcessing } from '../../instructions/data-processing/data-processing';
-import { char, either, map } from '../parser-combinators';
 import { Memory } from '../memory/types';
 import { evalExpression } from './eval-expression';
 import { program } from './parsers';
-import { comment, multilineComment } from './parsers/comments';
-import { not } from './parsers/not';
-import { doubleQuote, endMultilineComment, stringConstant } from './parsers/tokens';
+import { preProcess } from './pre-process';
 import { toIEEE754SinglePrecision } from './to-ieee754-single-precision';
+import { PreProcessOptions } from './pre-process';
 import {
+  AsciiDirective,
   Context,
   DirectiveHandler,
+  DirectiveStatement,
+  EquivDirective,
+  FloatDirective,
+  GlobalDirective,
   GlobalSymbols,
   Handler,
   InstructionHandler,
-  PreProcessOptions,
+  InstructionStatement,
+  LabelStatement,
   Section,
+  Statement,
+  SymbolAssignmentStatement,
   SymbolTable,
+  WordDirective,
+  ZeroDirective,
 } from './types';
-import { Failure, Result } from '../parser-combinators/types';
 
 export type CPUType = 'arm7di';
 
@@ -65,19 +72,11 @@ export const getPreprocessOptions = (cpuType: CPUType): PreProcessOptions => {
 };
 
 export class Assembler {
-  #handlers: Record<string, Handler>;
   #instructionHandlers: Record<number, InstructionHandler>;
   #directiveHandlers: Record<string, DirectiveHandler>;
   #singleDataTransferHandlers: Record<number, InstructionHandler>;
 
   constructor() {
-    this.#handlers = {
-      Directive: this.#directiveHandler,
-      Instruction: this.#instructionHandler,
-      Label: this.#labelHandler,
-      SymbolAssignment: this.#symbolAssignmentHandler,
-    };
-
     this.#singleDataTransferHandlers = {
       [LDR]: this.#ldrHandler,
       [LDRB]: this.#ldrHandler,
@@ -109,35 +108,35 @@ export class Assembler {
     };
 
     this.#directiveHandlers = {
-      [ASCII]: this.#asciiHandler,
-      [STRING]: this.#stringHandler,
-      [WORD]: this.#wordHandler,
-      [ZERO]: this.#zeroHandler,
+      [ASCII]: this.#asciiHandler as DirectiveHandler,
+      [STRING]: this.#stringHandler as DirectiveHandler,
+      [WORD]: this.#wordHandler as DirectiveHandler,
+      [ZERO]: this.#zeroHandler as DirectiveHandler,
       [DATA]: this.#dataHandler,
       [TEXT]: this.#textHandler,
-      [GLOBAL]: this.#globalHandler,
-      [EQUIV]: this.#equivHandler,
-      [FLOAT]: this.#floatHandler,
+      [GLOBAL]: this.#globalHandler as DirectiveHandler,
+      [EQUIV]: this.#equivHandler as DirectiveHandler,
+      [FLOAT]: this.#floatHandler as DirectiveHandler,
     };
   }
 
-  assemble(source: string, memory: Memory, args?: AssemblerArgs): number | Failure {
+  assemble(source: string, memory: Memory, args?: AssemblerArgs): number {
     const { e = '_start', mcpu = 'arm7di' } = args ?? {};
     const startAddress = VECTOR_TABLE_END;
     const preProcessOptions = getPreprocessOptions(mcpu);
-    const preProcessResult = this.#preProcess(source, preProcessOptions);
+    const preProcessResult = preProcess(source, preProcessOptions);
 
     if (!preProcessResult.success) {
-      return preProcessResult;
+      throw Error(`Preprocess failed at line ${preProcessResult.position.line}:${preProcessResult.position.column} — ${preProcessResult.message}`);
     }
 
     const { value } = preProcessResult;
     const result = program.parse(value);
 
     if (!result.success) {
-      return result;
+      throw Error(`Parse failed at line ${result.position.line}:${result.position.column} — ${result.message}`);
     } else {
-      const body = result.value.body as any[];
+      const body = result.value.body as Statement[];
       const globalSymbols: GlobalSymbols = new Set();
       const symbolTable: SymbolTable = new Map();
       const textSection: Section = {
@@ -149,7 +148,7 @@ export class Assembler {
       };
       const dataSection: Section = {
         type: 'data',
-        locationCounter: startAddress,
+        locationCounter: 0,
         entries: [],
         symbols: new Set(),
         literalPool: [],
@@ -167,17 +166,13 @@ export class Assembler {
       body
         .filter((statement) => this.#handler(statement, context, 1, memory))
         /* Second pass */
-        .forEach((statement: any) => {
-          const { type } = statement;
-
-          switch (type) {
+        .forEach((statement) => {
+          switch (statement.type) {
             case 'SymbolAssignment': {
               return this.#symbolAssignmentHandler(statement, context, 2);
             }
             case 'Directive': {
-              const { name } = statement;
-
-              switch (name) {
+              switch (statement.name) {
                 case EQUIV: {
                   return this.#equivHandler(statement, context, 2);
                 }
@@ -194,10 +189,8 @@ export class Assembler {
 
       context.currentSection = textSection;
 
-      textSection.entries.forEach((statement: any) => {
-        const { type } = statement;
-
-        switch (type) {
+      textSection.entries.forEach((statement) => {
+        switch (statement.type) {
           case 'Instruction': {
             this.#instructionHandler(statement, context, 3, memory);
 
@@ -213,12 +206,12 @@ export class Assembler {
 
       context.currentSection = dataSection;
 
-      dataSection.entries.forEach((statement: any) => {
-        const { type } = statement;
-
-        switch (type) {
+      dataSection.entries.forEach((statement) => {
+        switch (statement.type) {
           case 'Directive': {
             this.#directiveHandler(statement, context, 3, memory);
+
+            break;
           }
         }
       });
@@ -269,6 +262,10 @@ export class Assembler {
 
   #addToLiteralPool(name: string, context: Context): string {
     const { currentSection, symbolTable } = context;
+    const existing = currentSection.literalPool.find((entry) => entry.name === name);
+
+    if (existing) return existing.symbolName;
+
     const symbolName = `${name}_LITERAL`;
 
     currentSection.literalPool.push({ location: 0, name, symbolName });
@@ -279,21 +276,22 @@ export class Assembler {
     return symbolName;
   }
 
-  #handler = (statement: any, context: Context, pass: 1 | 2 | 3, memory: Memory): void | boolean | number => {
-    const { type } = statement;
-    const handler = this.#handlers[type];
-
-    if (!handler) return false;
-
-    return handler(statement, context, pass, memory);
+  #handler: Handler = (statement, context, pass, memory) => {
+    switch (statement.type) {
+      case 'Directive':
+        return this.#directiveHandler(statement, context, pass, memory);
+      case 'Instruction':
+        return this.#instructionHandler(statement, context, pass, memory);
+      case 'Label':
+        return this.#labelHandler(statement, context, pass);
+      case 'SymbolAssignment':
+        return this.#symbolAssignmentHandler(statement, context, pass);
+      default:
+        return false;
+    }
   };
 
-  #instructionHandler = (
-    statement: any,
-    context: Context,
-    pass: 1 | 2 | 3,
-    memory: Memory,
-  ): void | boolean | number => {
+  #instructionHandler: InstructionHandler = (statement, context, pass, memory) => {
     const { opCode, location } = statement;
     const handler = this.#instructionHandlers[opCode];
 
@@ -301,9 +299,8 @@ export class Assembler {
 
     if (pass === 1) {
       const { currentSection } = context;
-      const { type } = currentSection;
 
-      if (type !== 'text') throw Error('Instruction outside of text section');
+      if (currentSection.type !== 'text') throw Error('Instruction outside of text section');
 
       const { entries, locationCounter } = currentSection;
 
@@ -314,46 +311,45 @@ export class Assembler {
 
       entries.push(statement);
 
-      if (opCode === LDR) handler(statement, context, pass, memory);
+      if (opCode === LDR || opCode === LDRB) handler(statement, context, pass, memory);
 
       return false;
     }
 
     const instruction = handler(statement, context, pass, memory);
 
-    if (typeof instruction === 'number') memory.writeUint32(location, instruction);
+    if (typeof instruction === 'number' && typeof location === 'number') memory.writeUint32(location, instruction);
   };
 
-  #directiveHandler = (statement: any, context: Context, pass: 1 | 2 | 3, memory: Memory): void | boolean => {
-    const { name } = statement;
-    const handler = this.#directiveHandlers[name];
+  #directiveHandler: DirectiveHandler = (statement, context, pass, memory) => {
+    const handler = this.#directiveHandlers[statement.name];
 
     if (!handler) throw Error('Bad directive');
 
     return handler(statement, context, pass, memory);
   };
 
-  #dataProcessingHandler = (statement: any, context: Context): number => {
-    const { rd, rn, i, s, cond, operand2, opCode, location } = statement;
+  #dataProcessingHandler: InstructionHandler = (statement, context): number => {
+    const { rd, rn, i, s, cond, operand2, opCode, location = 0 } = statement;
     const { symbolTable } = context;
 
-    if (operand2.type === 'ImmediateExpression') operand2.value = evalExpression(operand2, symbolTable, location);
+    const value =
+      operand2.type === 'ImmediateExpression' ? evalExpression(operand2, symbolTable, location) : operand2.value;
+    const shift = operand2.shift?.amount
+      ? { ...operand2.shift, amount: evalExpression(operand2.shift.amount, symbolTable, location) }
+      : operand2.shift;
 
-    const { shift } = operand2;
+    if (opCode === MOV && value < 0) {
+      const resolvedOperand2 = { ...operand2, value: -value - 1, shift };
 
-    if (shift?.amount) shift.amount = evalExpression(shift.amount, symbolTable, location);
-
-    if (opCode === MOV && operand2.value < 0) {
-      operand2.value = Math.abs(operand2.value - 1);
-
-      return dataProcessing({ rd, rn, i, s, cond, operand2, opCode: MVN });
-    } else {
-      return dataProcessing({ rd, rn, i, s, cond, operand2, opCode });
+      return dataProcessing({ rd, rn, i, s, cond, operand2: resolvedOperand2, opCode: MVN });
     }
+
+    return dataProcessing({ rd, rn, i, s, cond, operand2: { ...operand2, value, shift }, opCode });
   };
 
-  #branchHandler = (statement: any, context: Context): number => {
-    const { offset: offsetOrValue, cond, l, location } = statement;
+  #branchHandler: InstructionHandler = (statement, context): number => {
+    const { offset: offsetOrValue, cond, l, location = 0 } = statement;
     const { symbolTable } = context;
 
     let offset;
@@ -374,62 +370,51 @@ export class Assembler {
     return b({ offset, cond, l });
   };
 
-  #branchExchangeHandler = (statement: any): number => {
+  #branchExchangeHandler: InstructionHandler = (statement): number => {
     const { rn, cond } = statement;
 
     return bx({ rn, cond });
   };
 
-  #multiplyHandler = (statement: any): number => {
+  #multiplyHandler: InstructionHandler = (statement): number => {
     const { rd, rn, rs, rm } = statement;
 
     return mul({ rd, rn, rs, rm });
   };
 
-  #softWareInterruptHandler = (statement: any, context: Context): number => {
-    const { comment, location } = statement;
+  #softWareInterruptHandler: InstructionHandler = (statement, context): number => {
+    const { comment, location = 0 } = statement;
     const { symbolTable } = context;
 
     return svc({ comment: evalExpression(comment, symbolTable, location) });
   };
 
-  #singleDataTransferHandler = (
-    statement: any,
-    context: Context,
-    pass: 1 | 2 | 3,
-    memory: Memory,
-  ): number | void | boolean => {
+  #singleDataTransferHandler: InstructionHandler = (statement, context, pass, memory) => {
     const { opCode } = statement;
 
     return this.#singleDataTransferHandlers[opCode](statement, context, pass, memory);
   };
 
-  #blockDataTransferHandler = (statement: any): number => {
+  #blockDataTransferHandler: InstructionHandler = (statement): number => {
     const { cond, rn, registerList, p, u, s, w, l } = statement;
 
     return blockDataTransfer({ cond, rn, registerList, p, u, s, w, l });
   };
 
-  #ldrHandler = (statement: any, context: Context, pass: 1 | 2 | 3): number | boolean => {
-    const { rd, rn, byteWord, offset, location } = statement;
+  #ldrHandler: InstructionHandler = (statement, context, pass): number | boolean => {
+    const { rd, rn, byteWord, offset, location = 0 } = statement;
     const { symbolTable } = context;
 
     if (pass === 1) {
-      const { offset } = statement;
-
       if (offset?.type === 'LabelExpression') {
-        const {
-          value: { name },
-        } = offset;
-
-        offset.value.name = this.#addToLiteralPool(name, context);
+        statement.literalSymbol = this.#addToLiteralPool(offset.value.name, context);
       }
 
       return false;
     }
 
     if (offset?.type === 'LabelExpression') {
-      const address = evalExpression(offset, symbolTable, location);
+      const address = symbolTable.get(statement.literalSymbol!)!.value;
       const currentAddress = location + 8;
       const delta = address - currentAddress;
       const upDown = delta > 1 ? 1 : 0;
@@ -442,40 +427,41 @@ export class Assembler {
         u: upDown,
         b: byteWord,
       });
-    } else {
-      const { writeBack, prePost, i } = statement;
-
-      if (offset.type === 'ImmediateExpression') {
-        offset.value = evalExpression(offset, symbolTable, location);
-      } else {
-        const { shift } = offset;
-
-        if (shift?.amount) shift.amount = evalExpression(shift.amount, symbolTable, location);
-      }
-
-      return ldr({ i, rd, rn, offset, b: byteWord, w: writeBack, p: prePost });
     }
+
+    const { writeBack, prePost, i } = statement;
+    const resolvedOffset =
+      offset.type === 'ImmediateExpression'
+        ? { ...offset, value: evalExpression(offset, symbolTable, location) }
+        : offset.shift?.amount
+          ? { ...offset, shift: { ...offset.shift, amount: evalExpression(offset.shift.amount, symbolTable, location) } }
+          : offset;
+
+    return ldr({ i, rd, rn, offset: resolvedOffset, b: byteWord, w: writeBack, p: prePost });
   };
 
-  #strHandler = (statement: any, context: Context, pass: 1 | 2 | 3): number => {
-    const { opCode, rd, rn, offset, writeBack, prePost, i, location } = statement;
+  #strHandler: InstructionHandler = (statement, context): number => {
+    const { opCode, rd, rn, offset, writeBack, prePost, i, location = 0 } = statement;
     const { symbolTable } = context;
     const b = opCode === STRB ? 1 : 0;
+    const resolvedOffset =
+      offset.type === 'ImmediateExpression'
+        ? { ...offset, value: evalExpression(offset, symbolTable, location) }
+        : offset.shift?.amount
+          ? { ...offset, shift: { ...offset.shift, amount: evalExpression(offset.shift.amount, symbolTable, location) } }
+          : offset;
 
-    if (offset.type === 'ImmediateExpression') {
-      offset.value = evalExpression(offset, symbolTable, location);
-    } else {
-      const { shift } = offset;
-
-      if (shift?.amount) shift.amount = evalExpression(shift.amount, symbolTable, location);
-    }
-
-    return str({ i, rd, rn, offset, b, w: writeBack, p: prePost });
+    return str({ i, rd, rn, offset: resolvedOffset, b, w: writeBack, p: prePost });
   };
 
   /* Directive handlers */
 
-  #asciiHandler = (statement: any, context: Context, pass: 1 | 2 | 3, memory: Memory): void | boolean => {
+  #asciiHandler = (
+    statement: AsciiDirective,
+    context: Context,
+    pass: 1 | 2 | 3,
+    memory: Memory,
+  ): void | boolean => {
     const { currentSection, textSection } = context;
     const { type } = currentSection;
     const { value } = statement;
@@ -492,7 +478,7 @@ export class Assembler {
       return false;
     }
 
-    const { location } = statement;
+    const { location = 0 } = statement;
     const address = location + (type === 'data' ? textSection.locationCounter : 0);
 
     for (let i = 0, l = value.length; i < l; i++) {
@@ -500,32 +486,23 @@ export class Assembler {
     }
   };
 
-  #stringHandler = (statement: any, context: Context, pass: 1 | 2 | 3, memory: Memory): void | boolean => {
-    const { currentSection, textSection } = context;
-    const { type } = currentSection;
-    const { value } = statement;
+  #stringHandler = (
+    statement: AsciiDirective,
+    context: Context,
+    pass: 1 | 2 | 3,
+    memory: Memory,
+  ): void | boolean => {
+    if (pass === 1) statement.value = `${statement.value}\0`;
 
-    if (pass === 1) {
-      const { locationCounter, entries } = currentSection;
-
-      this.#updateLabels(context);
-
-      statement.location = locationCounter;
-      currentSection.locationCounter += value.length;
-      entries.push(statement);
-
-      return false;
-    }
-
-    const { location } = statement;
-    const address = location + (type === 'data' ? textSection.locationCounter : 0);
-
-    for (let i = 0, l = value.length; i < l; i++) {
-      memory.writeUint8(address + i, value.charCodeAt(i));
-    }
+    return this.#asciiHandler(statement, context, pass, memory);
   };
 
-  #wordHandler = (statement: any, context: Context, pass: 1 | 2 | 3, memory: Memory): void | boolean => {
+  #wordHandler = (
+    statement: WordDirective,
+    context: Context,
+    pass: 1 | 2 | 3,
+    memory: Memory,
+  ): void | boolean => {
     const { currentSection, textSection, symbolTable } = context;
     const { type } = currentSection;
     const { value } = statement;
@@ -542,7 +519,7 @@ export class Assembler {
       return false;
     }
 
-    const { location } = statement;
+    const { location = 0 } = statement;
     const address = location + (type === 'data' ? textSection.locationCounter : 0);
 
     for (let i = 0; i < value.length; i++) {
@@ -550,7 +527,12 @@ export class Assembler {
     }
   };
 
-  #zeroHandler = (statement: any, context: Context, pass: 1 | 2 | 3, memory: Memory): void | boolean => {
+  #zeroHandler = (
+    statement: ZeroDirective,
+    context: Context,
+    pass: 1 | 2 | 3,
+    memory: Memory,
+  ): void | boolean => {
     const { currentSection, textSection, symbolTable } = context;
     const { type } = currentSection;
 
@@ -568,7 +550,7 @@ export class Assembler {
       return false;
     }
 
-    const { location, size } = statement;
+    const { location = 0, size = 0 } = statement;
     const address = location + (type === 'data' ? textSection.locationCounter : 0);
 
     for (let i = 0; i < size; i++) {
@@ -576,27 +558,25 @@ export class Assembler {
     }
   };
 
-  #dataHandler = (_statement: any, context: Context): boolean => {
+  #dataHandler = (_statement: DirectiveStatement, context: Context): boolean => {
     context.currentSection = context.dataSection;
 
     return false;
   };
 
-  #textHandler = (_statement: any, context: Context): boolean => {
+  #textHandler = (_statement: DirectiveStatement, context: Context): boolean => {
     context.currentSection = context.textSection;
 
     return false;
   };
 
-  #globalHandler = (statement: any, context: Context): boolean => {
-    const { value } = statement;
-
-    context.globalSymbols.add(value);
+  #globalHandler = (statement: GlobalDirective, context: Context): boolean => {
+    context.globalSymbols.add(statement.value);
 
     return false;
   };
 
-  #equivHandler = (statement: any, context: Context, pass: 1 | 2 | 3): boolean => {
+  #equivHandler = (statement: EquivDirective, context: Context, pass: 1 | 2 | 3): boolean => {
     const { symbol, value } = statement;
 
     if (pass === 1) {
@@ -618,7 +598,12 @@ export class Assembler {
     return false;
   };
 
-  #floatHandler = (statement: any, context: Context, pass: 1 | 2 | 3, memory: Memory): void | boolean => {
+  #floatHandler = (
+    statement: FloatDirective,
+    context: Context,
+    pass: 1 | 2 | 3,
+    memory: Memory,
+  ): void | boolean => {
     const { currentSection, textSection } = context;
     const { type } = currentSection;
     const { value } = statement;
@@ -635,13 +620,13 @@ export class Assembler {
       return false;
     }
 
-    const { location } = statement;
+    const { location = 0 } = statement;
     const address = location + (type === 'data' ? textSection.locationCounter : 0);
 
     memory.writeUint32(address, toIEEE754SinglePrecision(value));
   };
 
-  #labelHandler = (statement: any, context: Context, pass: 1 | 2 | 3): boolean => {
+  #labelHandler = (statement: LabelStatement, context: Context, pass: 1 | 2 | 3): boolean => {
     if (pass === 1) {
       const { name } = statement;
       const { symbolTable, currentSection, currentSymbols } = context;
@@ -658,7 +643,7 @@ export class Assembler {
     return false;
   };
 
-  #symbolAssignmentHandler = (statement: any, context: Context, pass: 1 | 2 | 3): boolean => {
+  #symbolAssignmentHandler = (statement: SymbolAssignmentStatement, context: Context, pass: 1 | 2 | 3): boolean => {
     const { name, value } = statement;
 
     if (pass === 1) {
@@ -677,33 +662,4 @@ export class Assembler {
 
     return false;
   };
-
-  #preProcess(src: string, options?: PreProcessOptions): Result<string> {
-    const { commentIdentifier = ';' } = options || {};
-
-    let current = 0;
-    let value = '';
-    let state = { position: { index: 0, line: 1, column: 1 } };
-
-    while (current < src.length) {
-      const result = either(
-        map(stringConstant, (value) => `"${value.value}"`),
-        map(multilineComment, () => ''),
-        map(comment(commentIdentifier), () => ''),
-        map(either(not(char(commentIdentifier)), not(doubleQuote), not(endMultilineComment)), (value) =>
-          value.replace(/[ ]+/g, ' '),
-        ),
-      ).parse(src, state);
-
-      if (!result.success) return result;
-
-      current = result.position.index;
-
-      value += result.value;
-
-      state.position = { ...result.position };
-    }
-
-    return { success: true, value, ...state };
-  }
 }

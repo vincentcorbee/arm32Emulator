@@ -16,12 +16,6 @@ memoryController.mapDevice(0, memory.buffer.byteLength, memory);
 const cpu = new CPU(memoryController);
 const start = assembler.assemble(source, memory, { e: '_start' });
 
-if (typeof start !== 'number') {
-  console.error(start);
-
-  process.exit(1);
-}
-
 const input = process.stdin;
 
 /* Set the program counter to the start of the program */
@@ -33,6 +27,8 @@ cpu.setSP(memory.buffer.byteLength);
 // memory.view()
 
 cpu.viewRegisters();
+
+console.log();
 
 process.on('exit', () => {
   console.log();
@@ -52,6 +48,7 @@ input.on('data', (data) => {
     case '\r': {
       cpu.cycle();
       cpu.viewRegisters();
+      console.log();
       break;
     }
   }

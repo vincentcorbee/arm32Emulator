@@ -105,16 +105,36 @@ describe('Assembler', () => {
       assert.equal(memory.readUint32(VECTOR_TABLE_END + 8), sub1);
     });
 
-    test('encodes MOV with a negative immediate as MVN', () => {
+    test('rewrites mov rX, #-1 as mvn rX, #0', () => {
       const assembler = new Assembler();
       const memory = newMemory();
 
       assembler.assemble(`.global _start\n_start:\n  mov r0, #-1\n`, memory);
 
-      const encoded = memory.readUint32(VECTOR_TABLE_END);
-      const opCode = (encoded >>> 21) & 0xf;
+      const expected = dataProcessing({
+        rd: R0,
+        i: 1,
+        operand2: { value: 0, type: 'ImmediateExpression' },
+        opCode: MVN,
+      });
 
-      assert.equal(opCode, MVN);
+      assert.equal(memory.readUint32(VECTOR_TABLE_END), expected);
+    });
+
+    test('rewrites mov rX, #-N as mvn rX, #(-N - 1) for larger negatives', () => {
+      const assembler = new Assembler();
+      const memory = newMemory();
+
+      assembler.assemble(`.global _start\n_start:\n  mov r0, #-16\n`, memory);
+
+      const expected = dataProcessing({
+        rd: R0,
+        i: 1,
+        operand2: { value: 15, type: 'ImmediateExpression' },
+        opCode: MVN,
+      });
+
+      assert.equal(memory.readUint32(VECTOR_TABLE_END), expected);
     });
 
     test('encodes MUL', () => {
@@ -270,6 +290,31 @@ describe('Assembler', () => {
       const msgAddress = memory.readUint32(literalAddr);
       assert.equal(memory.readUint32(msgAddress), 0xdeadbeef);
     });
+
+    test('registers LDRB rX, =sym in the literal pool and loads the symbol address from it', () => {
+      const assembler = new Assembler();
+      const memory = newMemory();
+      const source = `.global _start\n_start:\n  ldrb r0, =byte_const\n.data\nbyte_const: .word 0xaa\n`;
+
+      assembler.assemble(source, memory);
+
+      const ldrAddr = VECTOR_TABLE_END;
+      const literalAddr = ldrAddr + 4;
+      const delta = literalAddr - (ldrAddr + 8);
+      const expected = ldr({
+        rd: R0,
+        rn: PC,
+        i: 1,
+        offset: { type: 'ImmediateExpression', value: Math.abs(delta) },
+        u: delta > 1 ? 1 : 0,
+        b: 1,
+      });
+
+      assert.equal(memory.readUint32(ldrAddr), expected);
+
+      const symAddress = memory.readUint32(literalAddr);
+      assert.equal(memory.readUint32(symAddress), 0xaa);
+    });
   });
 
   describe('LDR/STR with register base + immediate offset', () => {
@@ -351,7 +396,7 @@ describe('Assembler', () => {
       const memory = newMemory();
       const source = `.global nums\n.global _start\n_start:\n  mov r0, #0\n.data\nnums: .word 0x11223344, 0xaabbccdd\n`;
 
-      const numsAddr = assembler.assemble(source, memory, { e: 'nums' }) as number;
+      const numsAddr = assembler.assemble(source, memory, { e: 'nums' });
 
       assert.equal(memory.readUint32(numsAddr), 0x11223344);
       assert.equal(memory.readUint32(numsAddr + 4), 0xaabbccdd);
@@ -362,7 +407,7 @@ describe('Assembler', () => {
       const memory = newMemory();
       const source = `.global msg\n.global _start\n_start:\n  mov r0, #0\n.data\nmsg: .ascii "hi"\n`;
 
-      const msgAddr = assembler.assemble(source, memory, { e: 'msg' }) as number;
+      const msgAddr = assembler.assemble(source, memory, { e: 'msg' });
 
       assert.equal(memory.readUint8(msgAddr), 'h'.charCodeAt(0));
       assert.equal(memory.readUint8(msgAddr + 1), 'i'.charCodeAt(0));
@@ -382,9 +427,9 @@ describe('Assembler', () => {
         '',
       ].join('\n');
 
-      for (let i = 0; i < 8; i++) memory.writeUint8(VECTOR_TABLE_END + 0x1c + i, 0xff);
+      for (let i = 0; i < 8; i++) memory.writeUint8(VECTOR_TABLE_END + 4 + i, 0xff);
 
-      const bufAddr = assembler.assemble(source, memory, { e: 'buf' }) as number;
+      const bufAddr = assembler.assemble(source, memory, { e: 'buf' });
 
       assert.equal(memory.readUint8(bufAddr), 0);
       assert.equal(memory.readUint8(bufAddr + 1), 0);
@@ -410,6 +455,29 @@ describe('Assembler', () => {
       const lenValue = assembler.assemble(source, memory, { e: 'len' });
 
       assert.equal(lenValue, 'hello'.length);
+    });
+
+    test('places the data section immediately after the text section (no 0x1C gap)', () => {
+      const assembler = new Assembler();
+      const memory = newMemory();
+      const source = `.global val\n.global _start\n_start:\n  mov r0, #0\n.data\nval: .word 0xaa\n`;
+
+      const valAddr = assembler.assemble(source, memory, { e: 'val' });
+
+      assert.equal(valAddr, VECTOR_TABLE_END + 4);
+      assert.equal(memory.readUint32(VECTOR_TABLE_END + 4), 0xaa);
+    });
+
+    test('writes .string bytes with a trailing NUL terminator', () => {
+      const assembler = new Assembler();
+      const memory = newMemory();
+      const source = `.global msg\n.global _start\n_start:\n  mov r0, #0\n.data\nmsg: .string "hi"\n`;
+
+      const msgAddr = assembler.assemble(source, memory, { e: 'msg' });
+
+      assert.equal(memory.readUint8(msgAddr), 'h'.charCodeAt(0));
+      assert.equal(memory.readUint8(msgAddr + 1), 'i'.charCodeAt(0));
+      assert.equal(memory.readUint8(msgAddr + 2), 0);
     });
   });
 

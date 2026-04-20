@@ -1,4 +1,5 @@
 import { either, map, char } from '../parser-combinators';
+import { Result } from '../parser-combinators/types';
 import { multilineComment, comment } from './parsers/comments';
 import { not } from './parsers/not';
 import { doubleQuote, endMultilineComment, stringConstant } from './parsers/tokens';
@@ -7,7 +8,7 @@ export type PreProcessOptions = {
   commentIdentifier?: string;
 };
 
-export const preProcess = (src: string, options?: PreProcessOptions) => {
+export const preProcess = (src: string, options?: PreProcessOptions): Result<string> => {
   const { commentIdentifier = ';' } = options || {};
 
   let current = 0;
@@ -24,7 +25,7 @@ export const preProcess = (src: string, options?: PreProcessOptions) => {
       ),
     ).parse(src, state);
 
-    if (!result.success) break;
+    if (!result.success) return result;
 
     current = result.position.index;
 
@@ -33,5 +34,5 @@ export const preProcess = (src: string, options?: PreProcessOptions) => {
     state.position = { ...result.position };
   }
 
-  return { success: true, value, ...state };
+  return { success: true, value, position: state.position };
 };
