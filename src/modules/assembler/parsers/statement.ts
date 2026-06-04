@@ -1,9 +1,11 @@
 import { either, many, many0, map, peek } from '../../parser-combinators';
 import { sequence } from '../../parser-combinators/parsers/combinators/sequence';
 import { newline } from '../../parser-combinators/parsers/primary/newline';
+import { directive } from './directives';
 import { instruction } from './instructions';
 import { label } from './label';
 import { optionalWhitespace } from './optional-whitespace';
+import { parseSymbolAssignment } from './symbol-assignment';
 
 export const statement = map(
   sequence(
@@ -11,6 +13,8 @@ export const statement = map(
     many0(map(sequence(label, optionalWhitespace), (value) => value[0])),
     either(
       instruction,
+      directive,
+      parseSymbolAssignment,
       map(peek(newline), () => ({ type: 'EmptyStatement' })),
     ),
     optionalWhitespace,

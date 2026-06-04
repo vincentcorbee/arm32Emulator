@@ -1,9 +1,9 @@
-import { chain, map } from '../../../parser-combinators';
+import { map, chain } from '../../../parser-combinators';
+import { expression } from './expression';
 import { createNode } from '../mappers';
-import { number } from '../number';
 import { pound } from '../tokens';
 
 export const ImmediateExpression = map(
-  chain(pound, () => number),
+  chain(pound, () => expression),
   createNode('ImmediateExpression'),
 );
