@@ -1,9 +1,11 @@
 import { Memory } from '../memory';
 import { MemoryController } from '../memory-controller/types';
 import {
+  BlockDataTransferHandlers,
   ConditionHandlers,
   CPUInterface,
   DataProcessingHandlers,
+  FormattedRegisters,
   Instruction,
   InstructionHandlers,
   Pipeline,
@@ -11,21 +13,51 @@ import {
   SecondOperandValue,
   ShiftHandlers,
   ShiftResult,
+  SingleDataTransferHandlers,
 } from './types';
 import { REGISTERS } from './constants';
-import { CPSR, PC, R0, SP, SPSR, SPSR_SVC, SPSR_UND } from '../../constants/codes/registers';
-import { DATA_PROCESSING_IMMEDIATE, DATA_PROCESSING_REGISTER } from '../../constants/codes/class-codes';
+import {
+  CPSR,
+  LR,
+  PC,
+  R0,
+  R1,
+  R14_SVC,
+  R14_UND,
+  R2,
+  R7,
+  SP,
+  SPSR,
+  SPSR_SVC,
+  SPSR_UND,
+} from '../../constants/codes/registers';
+import {
+  BLOCK_DATA_TRANSFER,
+  BRANCH,
+  BRANCH_EXCHANGE,
+  DATA_PROCESSING_IMMEDIATE,
+  DATA_PROCESSING_REGISTER,
+  MULTIPLY,
+  SINGLE_DATA_TRANSFER_IMMIDIATE,
+  SINGLE_DATA_TRANSFER_REGISTER,
+  SUPERVISOR_CALL,
+  UNDEFINED,
+} from '../../constants/codes/class-codes';
 import { C, N, V, Z } from '../../constants/codes/flags';
 import { N as N_FLAG, C as C_FLAG, Z as Z_FLAG, V as V_FLAG } from '../../constants/mnemonics/flags';
 import { AL, EQ, GE, GT, LE, LT, NE } from '../../constants/codes/condition';
 import { M, SUPERVISOR, UND, USER } from '../../constants/codes/modes';
-import { MOV } from '../../constants/codes/op-codes';
+import { ADD, CMP, MOV, MVN, SUB, ORR, BIC } from '../../constants/codes/op-codes';
 import { ASR, LSL, LSR, ROR, RRX } from '../../constants/codes/shift-types';
 import { SHIFT_SOURCE_REGISTER } from '../../constants/codes/shift-source';
+import { EXIT_SYS_CALL, WRITE_SYS_CALL } from '../../constants/codes/sys-calls';
 import { Register } from '../../types/codes/register';
 import { RegisterCodesToNames } from '../../constants/maps';
 import { Condition } from '../../types/codes/condition';
 import { formatHex } from '../../utils';
+import { Exit, IOChannel, System } from '../../types/system';
+import { getSystem } from './helpers';
+import { GeneralRegisterName, StatusRegisterName } from '../../types/mnemonics/registers';
 
 export class CPU implements CPUInterface {
   #registers: RegistersMap;
@@ -35,23 +67,63 @@ export class CPU implements CPUInterface {
   #cylces: number;
   #instructionHandlers: InstructionHandlers;
   #dataProcessingHandlers: DataProcessingHandlers;
+  #singleDataTransferHandlers: SingleDataTransferHandlers;
+  #blockDataTransferHandlers: BlockDataTransferHandlers;
   #conditionHandlers: ConditionHandlers;
   #shiftHandlers: ShiftHandlers;
+  #stdin: IOChannel;
+  #stdout: IOChannel;
+  #stderr: IOChannel;
+  #exit: Exit;
+  #timeoutID: number | NodeJS.Immediate | null;
+  #isRunning: boolean;
+  #listeners: Record<'cycle', Array<(data: any) => void>>;
 
-  constructor(memoryController: MemoryController) {
+  constructor(memoryController: MemoryController, system: System = getSystem()) {
     this.#registers = REGISTERS;
     this.#registerMemory = new Memory(this.#registers.size * 4);
     this.#memoryController = memoryController;
     this.#pipeline = { fetch: null, decode: null, execute: null };
     this.#cylces = 0;
+    this.#stdin = system.io.stdin;
+    this.#stdout = system.io.stdout;
+    this.#stderr = system.io.stderr;
+    this.#exit = system.exit;
+    this.#timeoutID = null;
+    this.#isRunning = false;
+    this.#listeners = { cycle: [] };
 
     this.#instructionHandlers = {
       [DATA_PROCESSING_REGISTER]: this.#dataProcessingHandler,
       [DATA_PROCESSING_IMMEDIATE]: this.#dataProcessingHandler,
+      [SUPERVISOR_CALL]: this.#SVCTrap,
+      [SINGLE_DATA_TRANSFER_REGISTER]: this.#singleDataTransferHandler,
+      [SINGLE_DATA_TRANSFER_IMMIDIATE]: this.#singleDataTransferHandler,
+      [BRANCH]: this.#BHandler,
+      [BLOCK_DATA_TRANSFER]: this.#blockDataTransferHandler,
+      [MULTIPLY]: this.#MULHandler,
+      [UNDEFINED]: this.#undefinedTrap,
+      [BRANCH_EXCHANGE]: this.#BXHandler,
     };
 
     this.#dataProcessingHandlers = {
       [MOV]: this.#MOVHandler,
+      [MVN]: this.#MVNHandler,
+      [ADD]: this.#ADDHandler,
+      [SUB]: this.#SUBHandler,
+      [CMP]: this.#CMPHandler,
+      [ORR]: this.#ORRHandler,
+      [BIC]: this.#BICHandler,
+    };
+
+    this.#singleDataTransferHandlers = {
+      [1]: this.#LDRHandler,
+      [0]: this.#STRHandler,
+    };
+
+    this.#blockDataTransferHandlers = {
+      [1]: this.#LDMHandler,
+      [0]: this.#STMHandler,
     };
 
     this.#conditionHandlers = {
@@ -90,7 +162,44 @@ export class CPU implements CPUInterface {
     throw Error(`Invalid register: ${RegisterCodesToNames[register]}`);
   }
 
+  getRegistersFormatted(): FormattedRegisters {
+    const result = {} as FormattedRegisters;
+
+    this.#registers.keys().forEach((register) => {
+      const name = RegisterCodesToNames[register as Register];
+
+      /* Omit banked registers */
+      if (!name.includes('_')) {
+        const value = this.#getRegister(register);
+
+        const contents = formatHex(value);
+
+        let ascii = '';
+
+        if (register === CPSR) {
+          ascii = this.#getContentsPSR(register);
+        } else if (register !== PC) {
+          ascii = this.#getCharacters(value);
+        }
+
+        result[name as GeneralRegisterName | StatusRegisterName] = { contents, ascii };
+      }
+    });
+
+    const name = RegisterCodesToNames[SPSR];
+    const register = this.#getSPSR();
+    const value = register === SPSR ? 0 : this.#getRegister(register);
+    const ascii = register === SPSR ? '....' : this.#getContentsPSR(register);
+    const contents = formatHex(value);
+
+    result[name as StatusRegisterName] = { contents, ascii };
+
+    return result;
+  }
+
   viewRegisters(): void {
+    let result = '';
+
     this.#registers.keys().forEach((register) => {
       const name = RegisterCodesToNames[register as Register];
 
@@ -103,21 +212,13 @@ export class CPU implements CPUInterface {
         if (register === CPSR) {
           line += this.#getContentsPSR(register);
         } else if (register !== PC) {
-          for (let shift = 24; shift >= 0; shift -= 8) {
-            const charCode = (value >>> shift) & 0xff;
-
-            if (charCode >= 0x20 && charCode <= 0x7e) {
-              line += String.fromCharCode(charCode);
-            } else {
-              line += '·';
-            }
-          }
+          line += this.#getCharacters(value);
         }
 
-        process.stdout.write(`${line}\n`);
+        result += `${line}\n`;
       }
 
-      if (register === PC) process.stdout.write('\n');
+      if (register === PC) result += '\n';
     });
 
     const name = RegisterCodesToNames[SPSR];
@@ -126,9 +227,54 @@ export class CPU implements CPUInterface {
     const contents = register === SPSR ? '....' : this.#getContentsPSR(register);
     const line = `${name}:${' '.repeat(5 - name.length)}${formatHex(value)} ${contents}`;
 
-    process.stdout.write(`${line}\n\n`);
+    result += line;
+
+    this.#stdout.write(`${result}\n`);
   }
 
+  on(event: 'cycle', cb: (data: any) => void) {
+    const listeners = this.#listeners[event];
+
+    if (!listeners) return this;
+
+    if (listeners.some((listener) => listener === cb)) return this;
+
+    listeners.push(cb);
+
+    return this;
+  }
+
+  off(event: 'cycle', cb: (data: any) => void) {
+    const listeners = this.#listeners[event];
+
+    if (!listeners) return this;
+
+    this.#listeners[event] = listeners.filter((listener) => listener !== cb);
+
+    return this;
+  }
+
+  emit(event: 'cycle', ...data: any[]) {
+    const listeners = this.#listeners[event];
+
+    if (!listeners) return this;
+
+    listeners.forEach((listener) => listener(data));
+
+    return this;
+  }
+
+  /**
+    The CPU uses a three-stage pipeline.
+    It fetches, decodes, and executes instructions in parallel.
+    This means that at any given moment, the CPU is working on three instructions simultaneously:
+
+    1. Fetch: The CPU fetches the next instruction from memory.
+    2. Decode: The CPU decodes the previously fetched instruction.
+    3. Execute: The CPU executes the instruction decoded earlier.
+
+    We fake this pipeline by using a simple object to store the current instruction in each stage.
+  */
   cycle(): void {
     this.#fetch();
     this.#decode();
@@ -138,31 +284,158 @@ export class CPU implements CPUInterface {
 
     /* Fill pipeline */
     if (!this.#pipeline.execute) this.cycle();
+    else this.emit('cycle');
   }
 
   /**
    * The CPU runs forever until the program is terminated.
    */
   run(): void {
-    while (true) {
-      this.cycle();
+    if (!this.#isRunning) return;
+
+    this.cycle();
+
+    if (typeof setImmediate === 'function') {
+      this.#timeoutID = setImmediate(this.run.bind(this));
+    } else {
+      this.#timeoutID = requestAnimationFrame(this.run.bind(this));
     }
   }
 
+  start(): void {
+    if (this.#isRunning) return;
+
+    this.#isRunning = true;
+    this.run();
+  }
+
+  stop(): void {
+    const timeoutID = this.#timeoutID;
+
+    if (timeoutID === null) return;
+
+    if (typeof clearImmediate === 'function') {
+      clearImmediate(timeoutID as NodeJS.Immediate);
+    } else {
+      cancelAnimationFrame(timeoutID as number);
+    }
+
+    this.#timeoutID = null;
+    this.#isRunning = false;
+  }
+
   /**
-   * 4x   2x x 4x     x 4x 4x 12x
-   * Cond 00 I Opcode S Rn Rd Op2
-   */
+    4x   2x x 4x     x 4x 4x 12x
+    Cond 00 I Opcode S Rn Rd Op2
+
+    If the S bit is set (and Rd is not R15) the V flag in the CPSR will be set
+    if an overflow occurs into bit 31 of the result;
+    this may be ignored if the operands were considered unsigned, but warns
+    of a possible error if the operands were 2's complement signed.
+    The C flag will be set to the carry out of bit 31 of the ALU, the Z flag will be set if and only if the
+    result was zero, and the N flag will be set to the value of bit 31 of the result (indicating a negative result if
+    the operands are considered to be 2's complement signed).
+  */
   #dataProcessingHandler = (instruction: Instruction) => {
     return this.#dataProcessingHandlers[(instruction >> 21) & 0xf];
   };
 
   /**
-   * MOV{cond}{S} Rd, <Op2>
+    4x   x x x x x x x x 4x 4x 12x
+    Cond 0 1 I P U B W L Rn Rd Offset
+  */
+  #singleDataTransferHandler = (instruction: Instruction) => {
+    return this.#singleDataTransferHandlers[(instruction >> 20) & 0x1];
+  };
+
+  /**
+   * Addressing modes - Stack modes
    *
-   * 4x   2x x 4x     x 4x 4x 12x
-   * Cond 00 I Opcode S Rn Rd Op2
+   * Full ascending stack
+   * Pre-increment addressing
+   *
+   * Empty ascending stack
+   * Post-increment addressing
+   *
+   * Full descending stack
+   * Pre-decrement addressing
+   *
+   * Empty descending stack
+   * Post-decrement addressing
    */
+  #blockDataTransferHandler = (instruction: Instruction) => {
+    const loadStore = (instruction >> 20) & 0x1;
+
+    return this.#blockDataTransferHandlers[loadStore];
+  };
+
+  /**
+   * B{L}{cond} <expression>
+   *
+   * 4x   x x x x 24x
+   * Cond 1 0 1 L offset
+   */
+  #BHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return;
+
+    const l = (instruction >> 24) & 0x1;
+    const offset = instruction & 0xffffff;
+    const sign = (offset >>> 23) & 0x1;
+    const pc = this.#getRegister(PC);
+    const signedOffset = sign ? ((0xff << 24) >>> 0) | offset : offset;
+
+    this.#setRegister(PC, pc + signedOffset);
+
+    /* Adjust PC to allow prefetching */
+    if (l) this.#setRegister(LR, pc - 4);
+
+    this.#flushPipeline();
+  };
+
+  /**
+   * BX{cond} Rn
+   */
+  #BXHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return;
+
+    const rn = instruction & 0xf;
+
+    this.#setRegister(PC, this.#getRegister(rn));
+    this.#flushPipeline();
+  };
+
+  /**
+   * CMP{cond} Rn, <Op2>
+   */
+  #CMPHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return;
+
+    const rn = (instruction >> 16) & 0xf;
+    const left = this.#getRegister(rn);
+    const { value: right } = this.#getSecondOperandValue(instruction);
+    const result = left - right;
+
+    const signLeft = (left >>> 31) & 0x1;
+    const signRight = (right >>> 31) & 0x1;
+    const signResult = (result >>> 31) & 0x1;
+
+    const overflow = signLeft !== signRight && signLeft !== signResult;
+    const carry = left >>> 0 >= right >>> 0;
+    const negative = signResult === 1;
+    const zero = result === 0;
+
+    this.#setCarryFlag(carry);
+    this.#setOverflowFlag(overflow);
+    this.#setNegativeFlag(negative);
+    this.#setZeroFlag(zero);
+  };
+
+  /**
+    MOV{cond}{S} Rd, <Op2>
+
+    4x   2x x 4x     x 4x 4x 12x
+    Cond 00 I Opcode S Rn Rd Op2
+  */
   #MOVHandler = (instruction: Instruction): void => {
     if (!this.#shouldExecute(instruction)) return;
 
@@ -180,10 +453,435 @@ export class CPU implements CPUInterface {
   };
 
   /**
+    MVN{cond}{S} Rd, <Op2>
+
+    4x   2x x 4x     x 4x 4x 12x
+    Cond 00 I Opcode S Rn Rd Op2
+  */
+  #MVNHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return;
+
+    const rd = (instruction >> 12) & 0xf;
+    const s = (instruction >> 20) & 0x1;
+    const { carry, value } = this.#getSecondOperandValue(instruction);
+    const negatedValue = ~value;
+
+    this.#setRegister(rd, negatedValue);
+
+    if (s) {
+      this.#setCarryFlag(carry === 1);
+      this.#setNegativeFlag(((negatedValue >>> 31) & 0x1) === 1);
+      this.#setZeroFlag(negatedValue === 0);
+    }
+  };
+
+  /**
+    ORR{cond}{S} Rd, Rn, <Op2>
+
+    4x   2x x 4x     x 4x 4x 12x
+    Cond 00 I Opcode S Rn Rd Op2
+  */
+  #ORRHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return;
+
+    const s = (instruction >> 20) & 0x1;
+    const rn = (instruction >> 16) & 0xf;
+    const rd = (instruction >> 12) & 0xf;
+    const left = this.#getRegister(rn);
+    const { carry, value: right } = this.#getSecondOperandValue(instruction);
+    const result = left | right;
+
+    this.#setRegister(rd, result);
+
+    if (s) {
+      this.#setCarryFlag(carry === 1);
+      this.#setNegativeFlag(((result >>> 31) & 0x1) === 1);
+      this.#setZeroFlag(result === 0);
+    }
+  };
+
+  /**
+    BIC{cond}{S} Rd, Rn, <Op2>
+
+    4x   2x x 4x     x 4x 4x 12x
+    Cond 00 I Opcode S Rn Rd Op2
+  */
+  #BICHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return;
+
+    const s = (instruction >> 20) & 0x1;
+    const rn = (instruction >> 16) & 0xf;
+    const rd = (instruction >> 12) & 0xf;
+    const left = this.#getRegister(rn);
+    const { carry, value: right } = this.#getSecondOperandValue(instruction);
+    const result = left & right;
+
+    this.#setRegister(rd, result);
+
+    if (s) {
+      this.#setCarryFlag(carry === 1);
+      this.#setNegativeFlag(((result >>> 31) & 0x1) === 1);
+      this.#setZeroFlag(result === 0);
+    }
+  };
+
+  /**
+   * ADD{cond}{S} Rd, Rn, <Op2>
+   *
+   * 4x   2x x 4x     x 4x 4x 12x
+   * Cond 00 I Opcode S Rn Rd Op2
+   */
+  #ADDHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return;
+
+    const s = (instruction >> 20) & 0x1;
+    const rn = (instruction >> 16) & 0xf;
+    const rd = (instruction >> 12) & 0xf;
+    const left = this.#getRegister(rn);
+    const { value: right } = this.#getSecondOperandValue(instruction);
+    const result = left + right;
+
+    this.#setRegister(rd, result);
+
+    if (s) {
+      const signLeft = (left >>> 31) & 0x1;
+      const signRight = (right >>> 31) & 0x1;
+      const signResult = (result >>> 31) & 0x1;
+
+      const overflow = signLeft === signRight && signLeft !== signResult;
+      const carry = (left >>> 0) + (right >>> 0) > 0xffffffff;
+      const negative = signResult === 1;
+      const zero = result === 0;
+
+      this.#setCarryFlag(carry);
+      this.#setOverflowFlag(overflow);
+      this.#setNegativeFlag(negative);
+      this.#setZeroFlag(zero);
+    }
+  };
+
+  /**
+   * SUB{S}{cond} Rd, Rn, <Op2>
+   *
+   * 4x   2x x 4x     x 4x 4x 12x
+   * Cond 00 I Opcode S Rn Rd Op2
+   */
+  #SUBHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return;
+
+    const s = (instruction >> 20) & 0x1;
+    const rn = (instruction >> 16) & 0xf;
+    const rd = (instruction >> 12) & 0xf;
+    const left = this.#getRegister(rn);
+    const { value: right } = this.#getSecondOperandValue(instruction);
+    const result = left - right;
+
+    this.#setRegister(rd, result);
+
+    if (s) {
+      const signLeft = (left >>> 31) & 0x1;
+      const signRight = (right >>> 31) & 0x1;
+      const signResult = (result >>> 31) & 0x1;
+
+      const overflow = signLeft !== signRight && signLeft !== signResult;
+      const carry = left >>> 0 >= right >>> 0;
+      const negative = signResult === 1;
+      const zero = result === 0;
+
+      this.#setCarryFlag(carry);
+      this.#setOverflowFlag(overflow);
+      this.#setNegativeFlag(negative);
+      this.#setZeroFlag(zero);
+    }
+  };
+
+  /**
+   * MUL{cond}{S} Rd, Rm, Rs
+   *
+   * 31  28 27             22 21 20 19 16 15 12 11 8 7     4 3  0
+   *  Cond  0  0  0  0  0  0  A  S   Rd    Rn    Rs  1 0 0 1  Rm
+   */
+  #MULHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return;
+
+    const a = (instruction >> 21) & 0x1;
+
+    if (a === 1) throw Error('Invalid instruction');
+
+    const s = (instruction >> 20) & 0x1;
+    const rd = (instruction >> 16) & 0xf;
+    const rs = (instruction >> 8) & 0xf;
+    const rm = instruction & 0xf;
+    const left = this.#getRegister(rm);
+    const right = this.#getRegister(rs);
+    const result = left * right;
+
+    this.#setRegister(rd, result);
+
+    if (s) {
+      this.#setNegativeFlag(((result >>> 31) & 0x1) === 1);
+      this.#setZeroFlag(result === 0);
+    }
+  };
+
+  /**
+   * LDR{cond}{B}{T} Rd, <Address>
+   *
+   * 4x   x x x x x x x x 4x 4x 12x
+   * Cond 0 1 I P U B W L Rn Rd Offset
+   */
+  #LDRHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return;
+
+    const immediate = (instruction >> 25) & 0x1;
+    const loadStore = (instruction >> 20) & 0x1;
+
+    if (loadStore === 0) throw Error('Invalid instruction');
+
+    const writeBack = (instruction >> 21) & 0x1;
+    const byteWord = (instruction >> 22) & 0x1;
+    const upDown = (instruction >> 23) & 0x1;
+    const prePost = (instruction >> 24) & 0x1;
+    const baseRegister = (instruction >> 16) & 0xf;
+    const destinationRegister = (instruction >> 12) & 0xf;
+    const offset = instruction & 0xfff;
+    const offsetValue = (immediate ? offset : this.#getRegister(offset & 0xf)) * (upDown ? 1 : -1);
+    const addressBase = this.#getRegister(baseRegister);
+    const address = prePost || (!prePost && !writeBack) ? addressBase + offsetValue : addressBase;
+
+    this.#setRegister(
+      destinationRegister,
+      byteWord ? this.#memoryController.readUint8(address) : this.#memoryController.readUint32(address),
+    );
+
+    if (writeBack) {
+      this.#setRegister(baseRegister, prePost ? address : address + offsetValue);
+    }
+  };
+
+  /**
+   * STR{cond}{B}{T} Rd, <Address>
+   *
+   * 4x   x x x x x x x x 4x 4x 12x
+   * Cond 0 1 I P U B W L Rn Rd Offset
+   */
+  #STRHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return;
+
+    const immediate = (instruction >> 25) & 0x1;
+    const loadStore = (instruction >> 20) & 0x1;
+
+    if (loadStore === 1) throw Error('Invalid instruction');
+
+    const writeBack = (instruction >> 21) & 0x1;
+    const byteWord = (instruction >> 22) & 0x1;
+    const upDown = (instruction >> 23) & 0x1;
+    const prePost = (instruction >> 24) & 0x1;
+    const baseRegister = (instruction >> 16) & 0xf;
+    const sourceRegister = (instruction >> 12) & 0xf;
+    const offset = instruction & 0xfff;
+    const offsetValue = (immediate ? offset : this.#getRegister(offset & 0xf)) * (upDown ? 1 : -1);
+    const addressBase = this.#getRegister(baseRegister);
+    const address = prePost ? addressBase + offsetValue : addressBase;
+    const value = this.#getRegister(sourceRegister);
+
+    if (byteWord) {
+      this.#memoryController.writeUint8(address, value);
+    } else {
+      this.#memoryController.writeUint32(address, value);
+    }
+
+    if (writeBack) {
+      this.#setRegister(baseRegister, prePost ? address : address + offsetValue);
+    }
+  };
+
+  /**
+   * STM{cond}<FD|ED|FA|EA|IA|IB|DA|DB> Rn{!}, <Rlist>{^}
+   *
+   * 31   28  27   25 24 23 22 21 20 19  16  15          0
+   *   Cond     100    P  U  S  W  L   Rn    Register list
+   *
+   */
+  #STMHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return;
+
+    const loadStore = (instruction >> 20) & 0x1;
+
+    if (loadStore === 1) throw Error('Invalid instruction');
+
+    const prePost = (instruction >> 24) & 0x1;
+    const upDown = (instruction >> 23) & 0x1;
+    const _psrAndForceUserBit = (instruction >> 22) & 0x1;
+    const writeBack = (instruction >> 21) & 0x1;
+    const baseRegister = (instruction >> 16) & 0xf;
+
+    let registerList = instruction & 0xffff;
+    let address = this.#getRegister(baseRegister);
+    let index = 0;
+
+    while (registerList) {
+      const register = registerList & 0x1;
+
+      if (register) {
+        if (prePost) {
+          address += upDown ? 4 : -4;
+          this.#memoryController.writeUint32(address, this.#getRegister(index));
+        } else {
+          this.#memoryController.writeUint32(address, this.#getRegister(index));
+          address += upDown ? 4 : -4;
+        }
+      }
+
+      registerList = registerList >> 1;
+
+      index++;
+    }
+
+    if (writeBack) this.#setRegister(baseRegister, address);
+  };
+
+  /**
+   * LDM{cond}<FD|ED|FA|EA|IA|IB|DA|DB> Rn{!}, <Rlist>{^}
+   *
+   * 31   28  27   25 24 23 22 21 20 19  16  15          0
+   *   Cond     100    P  U  S  W  L   Rn    Register list
+   */
+  #LDMHandler = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return;
+
+    const loadStore = (instruction >> 20) & 0x1;
+
+    if (loadStore === 0) throw Error('Invalid instruction');
+
+    const prePost = (instruction >> 24) & 0x1;
+    const upDown = (instruction >> 23) & 0x1;
+    const _psrAndForceUserBit = (instruction >> 22) & 0x1;
+    const writeBack = (instruction >> 21) & 0x1;
+    const baseRegister = (instruction >> 16) & 0xf;
+
+    let registerList = instruction & 0xffff;
+    let address = this.#getRegister(baseRegister);
+    let index = Math.floor(Math.log2(registerList));
+
+    while (index > -1) {
+      const register = (registerList >> index) & 0x1;
+
+      if (register) {
+        if (prePost) {
+          address += upDown ? 4 : -4;
+          this.#setRegister(index, this.#memoryController.readUint32(address));
+        } else {
+          this.#setRegister(index, this.#memoryController.readUint32(address));
+          address += upDown ? 4 : -4;
+        }
+      }
+
+      index--;
+    }
+
+    if (writeBack) this.#setRegister(baseRegister, address);
+  };
+
+  /**
+    SVC{cond} imm24
+
+    3.4.4 Software interrupt
+    The software interrupt instruction (SWI) is used for getting into Supervisor mode,
+    usually to request a particular supervisor function.
+
+    When a SWI is executed, ARM7DI performs the following:
+    (1) Saves the address of the SWI instruction plus 4 in R14_svc; saves CPSR in SPSR_svc
+    (2) Forces M[4:0]=10011 (Supervisor mode) and sets the I bit in the CPSR
+    (3) Forces the PC to fetch the next instruction from address 0x08
+
+    To return from a SWI, use MOVS PC, R14_svc.
+    This will restore the PC and CPSR and return to the instruction following the SWI.
+  */
+  #SVCTrap = (instruction: Instruction): void => {
+    if (!this.#shouldExecute(instruction)) return;
+
+    const systemCall = this.#getRegister(R7);
+    const cpsr = this.#getRegister(CPSR);
+
+    /* 1 Store PC - 4, to allow for pipelining, in R14_svc and store cpsr register */
+    this.#setRegister(R14_SVC, this.#getRegister(PC) - 4);
+    this.#setRegister(SPSR_SVC, cpsr);
+
+    /* 2. Set supervisor mode and set I bit */
+    this.#setMode(SUPERVISOR);
+    this.#setRegister(CPSR, cpsr | (1 << 7));
+
+    /* 3. Set PC to 0x08 */
+    this.#setRegister(PC, 0x08);
+
+    this.#flushPipeline();
+
+    switch (systemCall) {
+      case EXIT_SYS_CALL: {
+        const exitCode = this.#getRegister(R0) & 0xff;
+
+        return this.#exit(exitCode);
+      }
+      case WRITE_SYS_CALL: {
+        const fd = this.#getRegister(R0);
+        const bufferAddress = this.#getRegister(R1);
+        const length = this.#getRegister(R2);
+        const buffer = new Uint8Array(this.#memoryController.getBufferSlice(bufferAddress, length));
+
+        if (fd === 1) this.#stdout.write(buffer);
+        else if (fd === 2) this.#stderr.write(buffer);
+        else throw Error(`Unknown file descriptor: ${fd}`);
+
+        break;
+      }
+      default:
+        throw Error(`Unknown system call: ${systemCall}`);
+    }
+
+    /* Restore CPSR and PC */
+    this.#setRegister(PC, this.#getRegister(R14_SVC));
+    this.#setRegister(CPSR, this.#getRegister(SPSR_SVC));
+  };
+
+  /**
    * 3.4.5 Undefined instruction trap
+   *
+   * When the ARM7DI comes across an instruction which it cannot handle (see Chapter 4.0: Instruction Set), it
+   * offers it to any coprocessors which may be present. If a coprocessor can perform this instruction but is busy
+   * at that time, ARM7DI will wait until the coprocessor is ready or until an interrupt occurs. If no coprocessor
+   * can handle the instruction then ARM7DI will take the undefined instruction trap.
+   *
+   * The trap may be used for software emulation of a coprocessor in a system which does not have the
+   * coprocessor hardware, or for general purpose instruction set extension by software emulation.
+   * When ARM7DI takes the undefined instruction trap it performs the following:
+   *
+   * (1) Saves the address of the Undefined or coprocessor instruction plus 4 in R14_und; saves CPSR in SPSR_und.
+   * (2) Forces M[4:0]=11011 (Undefined mode) and sets the I bit in the CPSR
+   * (3) Forces the PC to fetch the next instruction from address 0x04
+   *
+   * To return from this trap after emulating the failed instruction, use MOVS PC,R14_und. This will restore the
+   * CPSR and return to the instruction following the undefined instruction.
    */
   #undefinedTrap = (instruction: Instruction) => {
-    process.stderr.write(`Undefined instruction: ${instruction.toString(2).padStart(32, '0')}\n`);
+    /* 1. Save PC - 4, to allow for pipelining, in r14_und and save CPSR in SPSR_und */
+    this.#setRegister(R14_UND, this.#getRegister(PC) - 4);
+    this.#setRegister(SPSR_UND, this.#getRegister(CPSR));
+
+    /* 2. Set undefined mode and set I bit */
+    this.#setMode(UND);
+    this.#setRegister(CPSR, this.#getRegister(CPSR) | (1 << 7));
+
+    /* 3. Set PC to 0x04 */
+    this.#setRegister(PC, 0x04);
+
+    this.#flushPipeline();
+
+    this.#stderr.write(`Undefined instruction: ${instruction.toString(2).padStart(32, '0')}\n`);
+
+    /* Restore CPSR and PC */
+    this.#setRegister(PC, this.#getRegister(R14_UND));
+    this.#setRegister(CPSR, this.#getRegister(SPSR_UND));
   };
 
   /**
@@ -417,7 +1115,40 @@ export class CPU implements CPUInterface {
     return contents;
   }
 
+  #getCharacters(value: number): string {
+  let characters = '';
+
+  for (let shift = 24; shift >= 0; shift -= 8) {
+    const charCode = (value >>> shift) & 0xff;
+
+    if (charCode >= 0x20 && charCode <= 0x7e) {
+      characters += String.fromCharCode(charCode);
+    } else {
+      characters += '·';
+    }
+  }
+
+  return characters;
+}
+
+  /**
+   * Resets the pipeline which is needed when we branch to a new address.
+   */
+  #flushPipeline(): void {
+    this.#pipeline.fetch = null;
+    this.#pipeline.decode = null;
+    this.#pipeline.execute = null;
+  }
+
   #getClassCode(instruction: number): number {
+    if (((instruction >>> 21) & 0x3f) === 0 && ((instruction >>> 4) & 0xf) === MULTIPLY) {
+      return MULTIPLY;
+    } else if (((instruction >>> 4) & 0xffffff) === BRANCH_EXCHANGE) {
+      return BRANCH_EXCHANGE;
+    } else if (((instruction >>> 24) & 0xf) === SUPERVISOR_CALL) {
+      return SUPERVISOR_CALL;
+    }
+
     return (instruction >>> 25) & 0x7;
   }
 
@@ -436,14 +1167,14 @@ export class CPU implements CPUInterface {
   }
 
   /**
-   * Decodes the instruction and determine the type of instruction.
-   *
-   * We then set the execute function to the trap function that handles the instruction.
-   *
-   * Note:
-   * This is a simple form of instruction decoding where we use the class bits to determine the type of instruction to handle.
-   * This however could lead to ambigious situations. So a full proof decoding mechanism should be implemented later. But for now this is fine.
-   */
+    Decodes the instruction and determine the type of instruction.
+
+    We then set the execute function to the trap function that handles the instruction.
+
+    Note:
+    This is a simple form of instruction decoding where we use the class bits to determine the type of instruction to handle.
+    This however could lead to ambigious situations. So a full proof decoding mechanism should be implemented later. But for now this is fine.
+  */
   #decode(): void {
     const instruction = this.#pipeline.decode;
 

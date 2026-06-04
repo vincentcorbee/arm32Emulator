@@ -1,12 +1,21 @@
 import { Register } from '../../types/codes/register';
+import { GeneralRegisterName, StatusRegisterName } from '../../types/mnemonics/registers';
+
+export type FormattedRegisters = Record<GeneralRegisterName | StatusRegisterName, { contents: string; ascii: string }>;
 
 export interface CPUInterface {
   run(): void;
+  start(): void;
+  stop(): void;
   cycle(): void;
   setPC(value: number): void;
   setSP(value: number): void;
   viewRegisters(): void;
   getRegister(register: Register): number;
+  getRegistersFormatted(): FormattedRegisters;
+  on(event: 'cycle', cb: () => void): CPUInterface;
+  off(event: 'cycle', cb: () => void): CPUInterface;
+  emit(event: 'cycle', ...data: any[]): CPUInterface;
 }
 
 export type CPU = CPUInterface;
